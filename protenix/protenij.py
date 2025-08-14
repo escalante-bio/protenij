@@ -2081,11 +2081,12 @@ class Protenix(eqx.Module):
         )
     
     @eqx.filter_jit
-    def recycle(self, *, initial_embedding: InitialEmbedding, input_feature_dict, recycling_steps: int, key):
-        state = TrunkEmbedding(
-            s=jnp.zeros_like(initial_embedding.s_init),
-            z=jnp.zeros_like(initial_embedding.z_init),
-        )
+    def recycle(self, *, initial_embedding: InitialEmbedding, input_feature_dict, recycling_steps: int, key, state = None):
+        if state is None:
+            state = TrunkEmbedding(
+                s=jnp.zeros_like(initial_embedding.s_init),
+                z=jnp.zeros_like(initial_embedding.z_init),
+            )
 
         def body_fn(state: TrunkEmbedding, key):
             state = jax.lax.stop_gradient(state)  # Prevent gradient flow through recycling
