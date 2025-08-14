@@ -1482,15 +1482,15 @@ class RelativePositionEncoding(AbstractFromTorch):
         b_same_chain = (
             input_feature_dict["asym_id"][..., :, None]
             == input_feature_dict["asym_id"][..., None, :]
-        ).astype(jnp.int64)  # [..., N_token, N_token]
+        ).astype(jnp.int32)  # [..., N_token, N_token]
         b_same_residue = (
             input_feature_dict["residue_index"][..., :, None]
             == input_feature_dict["residue_index"][..., None, :]
-        ).astype(jnp.int64)  # [..., N_token, N_token]
+        ).astype(jnp.int32)  # [..., N_token, N_token]
         b_same_entity = (
             input_feature_dict["entity_id"][..., :, None]
             == input_feature_dict["entity_id"][..., None, :]
-        ).astype(jnp.int64)  # [..., N_token, N_token]
+        ).astype(jnp.int32)  # [..., N_token, N_token]
         d_residue = jnp.clip(
             input_feature_dict["residue_index"][..., :, None]
             - input_feature_dict["residue_index"][..., None, :]
