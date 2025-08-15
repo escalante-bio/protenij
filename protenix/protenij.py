@@ -17,6 +17,25 @@ from .backend import (
     LayerNorm,
 )
 
+import protenix
+import protenix.openfold_local
+import protenix.openfold_local.model
+import protenix.openfold_local.model.primitives
+import protenix.model
+import protenix.model.modules
+import protenix.model.modules.primitives
+import protenix.openfold_local.model.dropout
+import protenix.openfold_local.model.triangular_multiplicative_update
+import protenix.openfold_local.model.triangular_attention
+import protenix.model.modules.transformer
+import protenix.model.modules.pairformer
+import protenix.openfold_local.model.outer_product_mean
+import protenix.model.modules.embedders
+import protenix.model.modules.head
+import protenix.model.modules.diffusion
+import protenix.model.generator
+import protenix.model.modules.confidence
+import protenix.model.protenix
 
 def move_final_dim_to_dim(x, dim: int):
     # permute_final_dims
