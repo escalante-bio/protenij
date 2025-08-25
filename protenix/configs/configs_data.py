@@ -15,6 +15,7 @@
 # pylint: disable=C0114,C0301
 import os
 from copy import deepcopy
+from pathlib import Path
 
 from protenix.config.extend_types import GlobalConfigValue, ListValue
 
@@ -121,7 +122,7 @@ default_weighted_pdb_configs = {
     },
 }
 
-DATA_ROOT_DIR = os.environ.get("PROTENIX_DATA_ROOT_DIR", "/home/ubuntu/Protenix/release_data")
+DATA_ROOT_DIR = os.environ.get("PROTENIX_DATA_ROOT_DIR", str(Path("~/.protenix").expanduser()))
 
 # Use CCD cache created by scripts/gen_ccd_cache.py priority. (without date in filename)
 # See: docs/prepare_data.md
