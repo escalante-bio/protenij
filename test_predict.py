@@ -19,6 +19,8 @@ from protenix.configs.configs_inference import inference_configs
 from protenix.configs.configs_model_type import model_configs
 from protenix.config import parse_configs
 
+
+
 # ── 1. Config + Model Loading ──────────────────────────────────────────────────
 
 MODEL_NAME = "protenix_base_default_v1.0.0"
@@ -126,7 +128,7 @@ msa_features = (
     else {}
 )
 
-dummy_feats = ["template"]
+dummy_feats = []
 if len(msa_features) == 0:
     dummy_feats.append("msa")
 else:
@@ -136,7 +138,26 @@ features_dict = make_dummy_feature(features_dict, dummy_feats=dummy_feats)
 
 features_dict = data_type_transform(features_dict)
 
+# Compute template features from PDB structure
+from protenix.data.template import load_templates_from_pdb
+
+TEMPLATE_PDB = os.path.join(OUTPUT_DIR, "3bik.pdb")
+TEMPLATE_CHAIN = "A"
+if not os.path.exists(TEMPLATE_PDB):
+    import urllib.request
+    print(f"Downloading template PDB 3BIK...")
+    urllib.request.urlretrieve("https://files.rcsb.org/download/3BIK.pdb", TEMPLATE_PDB)
+
+print("Computing template features from PDB...")
 N_token = features_dict["token_index"].shape[0]
+query_aatype = features_dict["restype"].argmax(dim=-1).numpy()
+templates = load_templates_from_pdb(TEMPLATE_PDB, TEMPLATE_CHAIN, N_token, query_aatype)
+template_feats = templates.as_torch_dict()
+features_dict.update(template_feats)
+print(f"  template_aatype: {features_dict['template_aatype'].shape}")
+print(f"  template_distogram: {features_dict['template_distogram'].shape}")
+print(f"  template_unit_vector: {features_dict['template_unit_vector'].shape}")
+
 N_atom = features_dict["atom_to_token_idx"].shape[0]
 N_msa = features_dict["msa"].shape[0]
 print(f"Featurized: {N_token} tokens, {N_atom} atoms, {N_msa} MSA sequences")

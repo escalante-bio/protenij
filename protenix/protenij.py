@@ -2011,9 +2011,11 @@ class TemplateEmbedder(AbstractFromTorch):
             to_concat.append(pseudo_beta_mask_2d[..., None])
 
             aatype = input_feature_dict["template_aatype"][template_id]
-            aatype = jax.nn.one_hot(aatype, 32)
-            to_concat.append(jnp.broadcast_to(aatype[..., None, :, :], (*aatype.shape[:-1], z.shape[0], aatype.shape[-1])))
-            to_concat.append(jnp.broadcast_to(aatype[..., :, None, :], (*aatype.shape[:-1], aatype.shape[-2], z.shape[0], aatype.shape[-1])))
+            aatype = jax.nn.one_hot(aatype, 32)  # (N_token, 32)
+            # expand_at_dim(aatype, dim=-3): (1, N_token, 32) → (N_token, N_token, 32)
+            to_concat.append(jnp.broadcast_to(aatype[None, :, :], (z.shape[0], *aatype.shape)))
+            # expand_at_dim(aatype, dim=-2): (N_token, 1, 32) → (N_token, N_token, 32)
+            to_concat.append(jnp.broadcast_to(aatype[:, None, :], (aatype.shape[0], z.shape[0], aatype.shape[-1])))
 
             unit_vector = input_feature_dict["template_unit_vector"][template_id]
             unit_vector = unit_vector * multichain_mask[..., None] * pair_mask[..., None]
