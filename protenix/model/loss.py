@@ -25,7 +25,7 @@ from protenix.model.modules.frames import (
     gather_frame_atom_by_indices,
 )
 from protenix.model.utils import expand_at_dim
-from protenix.openfold_local.utils.checkpointing import get_checkpoint_fn
+from protenix.model.utils import get_checkpoint_fn
 from protenix.utils.torch_utils import cdist
 
 

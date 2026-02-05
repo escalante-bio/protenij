@@ -26,8 +26,8 @@ from protenix.model.utils import (
     pad_at_dim,
     reshape_at_dim,
 )
-from protenix.openfold_local.model.primitives import LayerNorm, trunc_normal_init_
-from protenix.openfold_local.utils.chunk_utils import chunk_layer
+from protenix.model.triangular.layers import LayerNorm, trunc_normal_init_
+from protenix.model.utils import chunk_layer
 
 
 class Linear(nn.Linear):

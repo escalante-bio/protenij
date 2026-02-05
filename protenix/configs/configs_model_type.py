@@ -233,4 +233,26 @@ model_configs = {
         "load_strict": False,  # For inference, it should be True.
         "use_msa": False,  # For efficiency, this model does not use MSA by default.
     },
+    "protenix_base_default_v1.0.0": {
+        "model": {
+            "N_cycle": 10,
+            "template_embedder": {
+                "n_blocks": 2,
+            },
+        },
+        "sample_diffusion": {
+            "N_step": 200,
+        },
+    },
+    "protenix_base_20250630_v1.0.0": {
+        "model": {
+            "N_cycle": 10,
+            "template_embedder": {
+                "n_blocks": 2,
+            },
+        },
+        "sample_diffusion": {
+            "N_step": 200,
+        },
+    },
 }
