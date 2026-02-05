@@ -13,6 +13,9 @@
 # limitations under the License.
 
 from protenix.data.template.template_featurizer import (
+    ChainInput,
     Templates,
-    load_templates_from_pdb,
+    build_templates_from_chains,
+    load_templates_from_structure,
+    load_templates_from_pdb,  # backwards compatibility alias
 )

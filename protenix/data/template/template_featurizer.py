@@ -17,21 +17,32 @@
 This module provides functionality to load template structures from PDB/mmCIF files
 and compute the derived features (distogram, unit vectors, masks) expected by
 the TemplateEmbedder module.
-
-Translated from upstream Protenix, adapted to use openfold utilities.
 """
 
 import dataclasses
 from typing import Dict, Optional, Sequence
 
+import gemmi
 import numpy as np
 import torch
-from biotite.sequence import ProteinSequence
-from biotite.structure import AtomArray
-from biotite.structure.io.pdb import PDBFile as BiotitePDBFile
 
 import protenix.openfold_local.np.residue_constants as rc
-from protenix.openfold_local.utils.rigid_utils import Rigid
+
+
+@dataclasses.dataclass
+class ChainInput:
+    """Input specification for a single chain in a prediction.
+
+    Attributes:
+        sequence: Amino acid sequence (one-letter codes).
+        compute_msa: Whether to compute MSA for this chain.
+        template: Optional gemmi.Chain containing template coordinates,
+            or None if no template is available for this chain.
+    """
+
+    sequence: str
+    compute_msa: bool = True
+    template: Optional[gemmi.Chain] = None
 
 
 @dataclasses.dataclass(frozen=True)
@@ -234,60 +245,69 @@ def _compute_template_unit_vector(
     return unit_vector, mask_2d
 
 
-def load_templates_from_pdb(
-    pdb_path: str,
+def load_templates_from_structure(
+    path: str,
     chain_id: str,
-    num_residues: int,
+    num_residues: Optional[int] = None,
     query_aatype: Optional[np.ndarray] = None,
 ) -> Templates:
-    """Load template features from a PDB file.
+    """Load template features from a PDB or mmCIF file.
 
-    Parses a PDB structure, extracts atom coordinates for the specified chain,
-    and constructs a Templates object ready for feature computation.
+    Parses a structure file using gemmi, extracts atom coordinates for the
+    specified chain, and constructs a Templates object ready for feature computation.
 
     Args:
-        pdb_path: Path to PDB file.
+        path: Path to PDB or mmCIF file.
         chain_id: Chain identifier to extract.
-        num_residues: Number of residues to extract (from the start of the chain).
+        num_residues: Number of residues to extract. If None, uses all residues.
         query_aatype: Optional query residue types to use instead of template's.
             Shape: (num_residues,). If None, uses the template's residue types.
 
     Returns:
         Templates object containing the extracted structure data.
     """
-    # Parse PDB
-    pdb_file = BiotitePDBFile.read(pdb_path)
-    atoms = pdb_file.get_structure(model=1)
-    chain = atoms[atoms.chain_id == chain_id]
+    # Parse structure (gemmi auto-detects PDB vs mmCIF)
+    structure = gemmi.read_structure(path)
+    model = structure[0]  # First model
+    chain = model[chain_id]
 
-    # Get ordered residue IDs from CA atoms
-    ca_atoms = chain[chain.atom_name == "CA"]
-    res_ids = ca_atoms.res_id[:num_residues]
+    # Get polymer residues only (skip ligands, water, etc.)
+    residues = [
+        res for res in chain
+        if gemmi.find_tabulated_residue(res.name).is_amino_acid()
+    ]
+    if num_residues is not None:
+        residues = residues[:num_residues]
+    else:
+        num_residues = len(residues)
 
     # Build atom37 positions and masks
     atom_positions = np.zeros((num_residues, 37, 3), dtype=np.float32)
     atom_mask = np.zeros((num_residues, 37), dtype=np.float32)
+    res_names = []
 
-    for i, rid in enumerate(res_ids):
-        res_atoms = chain[chain.res_id == rid]
-        for atom in res_atoms:
-            aname = atom.atom_name
+    for i, res in enumerate(residues):
+        res_names.append(res.name)
+        for atom in res:
+            aname = atom.name
             if aname in rc.atom_order:
                 aidx = rc.atom_order[aname]
-                atom_positions[i, aidx] = atom.coord
+                atom_positions[i, aidx] = [atom.pos.x, atom.pos.y, atom.pos.z]
                 atom_mask[i, aidx] = 1.0
 
     # Get aatype from template or use provided query aatype
     if query_aatype is not None:
         aatype = query_aatype
     else:
-        # Extract from template structure
-        pdb_seq = "".join(
-            ProteinSequence.convert_letter_3to1(r)
-            for r in ca_atoms.res_name[:num_residues]
-        )
+        # Extract from template structure using gemmi's 3-to-1 conversion
         aatype = np.array(
-            [rc.restype_order.get(aa, rc.unk_restype_index) for aa in pdb_seq],
+            [
+                rc.restype_order.get(
+                    gemmi.find_tabulated_residue(name).one_letter_code,
+                    rc.unk_restype_index,
+                )
+                for name in res_names
+            ],
             dtype=np.int64,
         )
 
@@ -296,4 +316,125 @@ def load_templates_from_pdb(
         aatype=aatype[None],  # (1, num_res)
         atom_positions=atom_positions[None],  # (1, num_res, 37, 3)
         atom_mask=atom_mask[None],  # (1, num_res, 37)
+    )
+
+
+# Backwards compatibility alias
+load_templates_from_pdb = load_templates_from_structure
+
+
+def _extract_chain_template(
+    chain: gemmi.Chain,
+    expected_length: int,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Extract template features from a gemmi.Chain.
+
+    Args:
+        chain: gemmi.Chain containing template coordinates.
+        expected_length: Expected number of residues (for validation/padding).
+
+    Returns:
+        Tuple of (aatype, atom_positions, atom_mask) for this chain.
+        Shapes: (num_res,), (num_res, 37, 3), (num_res, 37)
+    """
+    # Get polymer residues only
+    residues = [
+        res for res in chain
+        if gemmi.find_tabulated_residue(res.name).is_amino_acid()
+    ]
+    num_res = len(residues)
+
+    if num_res != expected_length:
+        raise ValueError(
+            f"Template chain has {num_res} residues but expected {expected_length}"
+        )
+
+    # Build atom37 positions and masks
+    atom_positions = np.zeros((num_res, 37, 3), dtype=np.float32)
+    atom_mask = np.zeros((num_res, 37), dtype=np.float32)
+    aatype = np.zeros(num_res, dtype=np.int64)
+
+    for i, res in enumerate(residues):
+        # Get aatype from residue name
+        one_letter = gemmi.find_tabulated_residue(res.name).one_letter_code
+        aatype[i] = rc.restype_order.get(one_letter, rc.unk_restype_index)
+
+        # Extract atom coordinates
+        for atom in res:
+            if atom.name in rc.atom_order:
+                aidx = rc.atom_order[atom.name]
+                atom_positions[i, aidx] = [atom.pos.x, atom.pos.y, atom.pos.z]
+                atom_mask[i, aidx] = 1.0
+
+    return aatype, atom_positions, atom_mask
+
+
+def _empty_chain_template(num_res: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Create empty template features for a chain without a template.
+
+    Args:
+        num_res: Number of residues in the chain.
+
+    Returns:
+        Tuple of (aatype, atom_positions, atom_mask) filled with gaps/zeros.
+        Shapes: (num_res,), (num_res, 37, 3), (num_res, 37)
+    """
+    # Use gap token (index 20 in standard ordering, but we use unk which is also fine)
+    # The mask being zero means these positions won't contribute
+    aatype = np.full(num_res, rc.unk_restype_index, dtype=np.int64)
+    atom_positions = np.zeros((num_res, 37, 3), dtype=np.float32)
+    atom_mask = np.zeros((num_res, 37), dtype=np.float32)
+    return aatype, atom_positions, atom_mask
+
+
+def build_templates_from_chains(
+    chains: Sequence[ChainInput],
+    num_templates: int = 1,
+) -> Templates:
+    """Build combined template features from multiple chain inputs.
+
+    Creates a Templates object with features for all chains concatenated.
+    Chains with templates get their template coordinates; chains without
+    templates get zero-filled features (which the model ignores via masks).
+
+    Args:
+        chains: Sequence of ChainInput specifications.
+        num_templates: Number of template slots to create (default 1).
+
+    Returns:
+        Templates object with concatenated features for all chains.
+        Shapes will be (num_templates, total_residues, ...).
+    """
+    total_residues = sum(len(c.sequence) for c in chains)
+
+    # Initialize arrays for all templates
+    all_aatype = np.zeros((num_templates, total_residues), dtype=np.int64)
+    all_positions = np.zeros((num_templates, total_residues, 37, 3), dtype=np.float32)
+    all_mask = np.zeros((num_templates, total_residues, 37), dtype=np.float32)
+
+    # Fill in each chain's contribution
+    offset = 0
+    for chain_input in chains:
+        chain_len = len(chain_input.sequence)
+
+        if chain_input.template is not None:
+            # Extract template features from the provided chain
+            aatype, positions, mask = _extract_chain_template(
+                chain_input.template, chain_len
+            )
+        else:
+            # No template - use empty features
+            aatype, positions, mask = _empty_chain_template(chain_len)
+
+        # Copy into the first template slot (others remain zero)
+        all_aatype[0, offset : offset + chain_len] = aatype
+        all_positions[0, offset : offset + chain_len] = positions
+        all_mask[0, offset : offset + chain_len] = mask
+
+        offset += chain_len
+
+    return Templates(
+        aatype=all_aatype,
+        atom_positions=all_positions,
+        atom_mask=all_mask,
     )
