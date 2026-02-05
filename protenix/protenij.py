@@ -1018,7 +1018,10 @@ def sample_msa_feature_dict_random_without_replacement(
 class MSAModule(eqx.Module):
     linear_no_bias_m: Linear
     linear_no_bias_s: Linear
-    blocks: any
+    # MSABlocks have heterogeneous tree structure (some have msa_stack, some don't)
+    # so we store them as a list rather than trying to stack for scan.
+    # With only 1-4 blocks, the JIT overhead is minimal.
+    blocks: list[MSABlock]
     msa_configs: dict
     training: bool
     input_feature: dict
@@ -1055,6 +1058,7 @@ class MSAModule(eqx.Module):
         )
         msa_sample = self.linear_no_bias_m(msa_sample)
         msa_sample = msa_sample + self.linear_no_bias_s(s_inputs)
+
         for block in self.blocks:
             key = jax.random.fold_in(key, 1)
             msa_sample, z = block(msa_sample, z, pair_mask, key=key)
@@ -1065,10 +1069,11 @@ class MSAModule(eqx.Module):
     def from_torch(
         m: protenix.model.modules.pairformer.MSAModule,
     ):
+        blocks = [from_torch(block) for block in m.blocks]
         return MSAModule(
             linear_no_bias_m=from_torch(m.linear_no_bias_m),
             linear_no_bias_s=from_torch(m.linear_no_bias_s),
-            blocks=from_torch(m.blocks),
+            blocks=blocks,
             msa_configs=m.msa_configs,
             training=m.training,
             input_feature=from_torch(m.input_feature),
@@ -2000,35 +2005,50 @@ class TemplateEmbedder(AbstractFromTorch):
         z_normed = self.layernorm_z(z)
         u = jnp.zeros_like(z_normed[..., :self.c])
 
-        for template_id in range(num_templates):
-            to_concat = []
-            dgram = input_feature_dict["template_distogram"][template_id]
-            pseudo_beta_mask_2d = input_feature_dict["template_pseudo_beta_mask"][template_id]
+        # Stack template features for scan: shapes are (N_templates, ...)
+        template_xs = (
+            input_feature_dict["template_distogram"],
+            input_feature_dict["template_pseudo_beta_mask"],
+            input_feature_dict["template_aatype"],
+            input_feature_dict["template_unit_vector"],
+            input_feature_dict["template_backbone_frame_mask"],
+        )
+
+        def body_fn(carry, xs):
+            u, key = carry
+            dgram, pseudo_beta_mask_2d, aatype, unit_vector, backbone_mask_2d = xs
+            key = jax.random.fold_in(key, 1)
+
+            # Apply masks
             dgram = dgram * multichain_mask[..., None] * pair_mask[..., None]
             pseudo_beta_mask_2d = pseudo_beta_mask_2d * multichain_mask * pair_mask
-            to_concat.append(dgram)
-            to_concat.append(pseudo_beta_mask_2d[..., None])
 
-            aatype = input_feature_dict["template_aatype"][template_id]
+            # One-hot encode aatype
             aatype = jax.nn.one_hot(aatype, 32)  # (N_token, 32)
-            # expand_at_dim(aatype, dim=-3): (1, N_token, 32) → (N_token, N_token, 32)
-            to_concat.append(jnp.broadcast_to(aatype[None, :, :], (z.shape[0], *aatype.shape)))
-            # expand_at_dim(aatype, dim=-2): (N_token, 1, 32) → (N_token, N_token, 32)
-            to_concat.append(jnp.broadcast_to(aatype[:, None, :], (aatype.shape[0], z.shape[0], aatype.shape[-1])))
 
-            unit_vector = input_feature_dict["template_unit_vector"][template_id]
+            # Apply masks to unit_vector and backbone_mask
             unit_vector = unit_vector * multichain_mask[..., None] * pair_mask[..., None]
-            to_concat.append(unit_vector)
-
-            backbone_mask_2d = input_feature_dict["template_backbone_frame_mask"][template_id]
             backbone_mask_2d = backbone_mask_2d * multichain_mask * pair_mask
-            to_concat.append(backbone_mask_2d[..., None])
 
+            # Concatenate all features
+            to_concat = [
+                dgram,
+                pseudo_beta_mask_2d[..., None],
+                # expand_at_dim(aatype, dim=-3): (1, N_token, 32) → (N_token, N_token, 32)
+                jnp.broadcast_to(aatype[None, :, :], (z.shape[0], *aatype.shape)),
+                # expand_at_dim(aatype, dim=-2): (N_token, 1, 32) → (N_token, N_token, 32)
+                jnp.broadcast_to(aatype[:, None, :], (aatype.shape[0], z.shape[0], aatype.shape[-1])),
+                unit_vector,
+                backbone_mask_2d[..., None],
+            ]
             at = jnp.concatenate(to_concat, axis=-1)
             v = self.linear_no_bias_z(z_normed) + self.linear_no_bias_a(at)
             _, v = self.pairformer_stack(s=None, z=v, pair_mask=pair_mask, key=key)
             v = self.layernorm_v(v)
             u = u + v
+            return (u, key), None
+
+        (u, _), _ = jax.lax.scan(body_fn, (u, key), template_xs)
 
         u = u / (1e-7 + num_templates)
         u = self.linear_no_bias_u(jax.nn.relu(u))
