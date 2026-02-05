@@ -322,9 +322,8 @@ class TriangleMultiplication(AbstractFromTorch):
 
         x = self.layer_norm_out(x)
         x = self.linear_z(x)
-        # NOTE: THE FOLLOWING IS A BUG? ROUGHLY
-        # we apply directly to the residual stream?
-        g = self.sigmoid(self.linear_g(z_in))
+        # Gate uses layer_norm'd z, not z_in (matches PyTorch)
+        g = self.sigmoid(self.linear_g(z))
 
         return x * g
 
@@ -2083,8 +2082,7 @@ class ConfidenceHead(AbstractFromTorch):
                 ((x_pred_rep_coords[..., None, :] - x_pred_rep_coords[..., None, :, :]) ** 2 + 1E-9).sum( axis=-1)
             )  # [..., N_tokens, N_tokens]
             z_pair += self.linear_no_bias_d(
-                (distance_pred[..., None] > self.lower_bins) * (distance_pred[..., None] < self.upper_bins)
-
+                ((distance_pred[..., None] > self.lower_bins) * (distance_pred[..., None] < self.upper_bins)).astype(jnp.float32)
             )  # [..., N_tokens, N_tokens, c_z]
             z_pair += self.linear_no_bias_d_wo_onehot(
                 distance_pred[..., None],
