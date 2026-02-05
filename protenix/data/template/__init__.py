@@ -15,6 +15,7 @@
 from protenix.data.template.template_featurizer import (
     ChainInput,
     Templates,
+    featurize,
     build_templates_from_chains,
     load_templates_from_structure,
     load_templates_from_pdb,  # backwards compatibility alias

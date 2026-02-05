@@ -3,7 +3,6 @@ import os
 os.environ["PROTENIX_DATA_ROOT_DIR"] = os.path.expanduser("~/.protenix")
 
 import copy
-import json
 from pathlib import Path
 
 import numpy as np
@@ -82,42 +81,12 @@ print(f"Chain A: {len(SEQUENCE_A)} residues (will have template)")
 print(f"Chain B: {len(SEQUENCE_B)} residues (NO template)")
 print(f"Total: {len(SEQUENCE_A) + len(SEQUENCE_B)} residues")
 
-# JSON input for featurization
-sample = {
-    "name": "two_chain_test",
-    "sequences": [
-        {"proteinChain": {"sequence": SEQUENCE_A, "count": 1}},
-        {"proteinChain": {"sequence": SEQUENCE_B, "count": 1}},
-    ],
-}
 
+# ── 3. Featurize ────────────────────────────────────────────────────────────────
 
-# ── 3. Featurize ───────────────────────────────────────────────────────────────
-
-from protenix.data.json_to_feature import SampleDictToFeatures
-from protenix.data.utils import make_dummy_feature, data_type_transform
+from protenix.data.template import ChainInput, featurize
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
-
-# Skip MSA search for faster testing - use dummy MSA
-print("\nSkipping MSA search (using dummy MSA for faster test)...")
-
-# Featurize
-print("Featurizing...")
-sample2feat = SampleDictToFeatures(sample)
-features_dict, atom_array, token_array = sample2feat.get_feature_dict()
-features_dict["distogram_rep_atom_mask"] = torch.Tensor(
-    atom_array.distogram_rep_atom_mask
-).long()
-
-# Use dummy MSA features for faster testing
-features_dict = make_dummy_feature(features_dict, dummy_feats=["msa"])
-features_dict = data_type_transform(features_dict)
-
-
-# ── 4. Build Template Features (Chain A only) ──────────────────────────────────
-
-from protenix.data.template import ChainInput, build_templates_from_chains
 
 # Download insulin structure for template
 TEMPLATE_PDB = os.path.join(OUTPUT_DIR, "4ins.pdb")
@@ -130,31 +99,27 @@ if not os.path.exists(TEMPLATE_PDB):
 structure = gemmi.read_structure(TEMPLATE_PDB)
 template_chain_a = structure[0]['A']  # Insulin A chain
 
-print("\nBuilding template features...")
-print(f"  Chain A: using template from 4INS chain A")
-print(f"  Chain B: NO template")
+# Define chains and featurize in one step
+# - compute_msa=False: use dummy MSA (just query sequence)
+# - compute_msa=True: run actual MSA search via MMSeqs2 service
+print("\nFeaturizing...")
+features_dict, atom_array, token_array = featurize([
+    ChainInput(
+        sequence=SEQUENCE_A,
+        compute_msa=False,  # Use dummy MSA for faster testing
+        template=template_chain_a,  # Has template
+    ),
+    ChainInput(
+        sequence=SEQUENCE_B,
+        compute_msa=True,  # Run MSA search
+        template=None,  # No template
+    ),
+])
 
-# Build templates using the new interface
-chains = [
-    ChainInput(sequence=SEQUENCE_A, compute_msa=True, template=template_chain_a),
-    ChainInput(sequence=SEQUENCE_B, compute_msa=True, template=None),  # No template!
-]
-
-templates = build_templates_from_chains(chains)
-template_feats = templates.as_torch_dict()
-features_dict.update(template_feats)
-
-# Verify template structure
+# Verify features
 print(f"\nTemplate features:")
 print(f"  template_aatype: {features_dict['template_aatype'].shape}")
 print(f"  template_distogram: {features_dict['template_distogram'].shape}")
-
-# Check masks
-N_a, N_b = len(SEQUENCE_A), len(SEQUENCE_B)
-mask = templates.atom_mask[0]
-print(f"\nTemplate atom coverage:")
-print(f"  Chain A atoms: {mask[:N_a].sum():.0f}")
-print(f"  Chain B atoms: {mask[N_a:].sum():.0f} (should be 0)")
 
 N_token = features_dict["token_index"].shape[0]
 N_atom = features_dict["atom_to_token_idx"].shape[0]
@@ -162,22 +127,20 @@ N_msa = features_dict["msa"].shape[0]
 print(f"\nFeaturized: {N_token} tokens, {N_atom} atoms, {N_msa} MSA sequences")
 
 
-# ── 5. Convert to JAX ──────────────────────────────────────────────────────────
+# ── 4. Convert to JAX ──────────────────────────────────────────────────────────
 
 print("\nConverting features to JAX...")
-jax_features = {}
-for key, value in features_dict.items():
-    if isinstance(value, torch.Tensor):
-        jax_features[key] = jnp.array(value.numpy())
-    else:
-        jax_features[key] = value
 
-jax_features["atom_rep_atom_idx"] = np.array(
-    features_dict["distogram_rep_atom_mask"]
-).nonzero()[0]
+def to_jax(v):
+    """Recursively convert numpy arrays to JAX arrays."""
+    if isinstance(v, dict):
+        return {k: to_jax(v2) for k, v2 in v.items()}
+    return jnp.array(v)
+
+jax_features = {k: to_jax(v) for k, v in features_dict.items()}
 
 
-# ── 6. Run Inference ───────────────────────────────────────────────────────────
+# ── 5. Run Inference ───────────────────────────────────────────────────────────
 
 N_cycle = 4
 N_sample = 1
@@ -195,7 +158,7 @@ print(f"Output coordinates shape: {outputs.coordinates.shape}")
 print(f"Coordinate range: [{float(outputs.coordinates.min()):.2f}, {float(outputs.coordinates.max()):.2f}]")
 
 
-# ── 7. Save Output ─────────────────────────────────────────────────────────────
+# ── 6. Save Output ─────────────────────────────────────────────────────────────
 
 from biotite.structure.io.pdb import PDBFile
 

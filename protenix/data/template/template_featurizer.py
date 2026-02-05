@@ -35,13 +35,18 @@ class ChainInput:
 
     Attributes:
         sequence: Amino acid sequence (one-letter codes).
-        compute_msa: Whether to compute MSA for this chain.
+        compute_msa: Whether to search for MSA for this chain. If False,
+            uses a dummy MSA (just the query sequence).
+        precomputed_msa_dir: Optional path to directory containing pre-computed
+            MSA files (pairing.a3m, non_pairing.a3m). If provided, used instead
+            of running MSA search.
         template: Optional gemmi.Chain containing template coordinates,
             or None if no template is available for this chain.
     """
 
     sequence: str
     compute_msa: bool = True
+    precomputed_msa_dir: Optional[str] = None
     template: Optional[gemmi.Chain] = None
 
 
@@ -438,3 +443,176 @@ def build_templates_from_chains(
         atom_positions=all_positions,
         atom_mask=all_mask,
     )
+
+
+# ============================================================================
+# Featurization
+# ============================================================================
+
+
+def _make_dummy_msa(sequence: str, msa_dir: str) -> None:
+    """Create dummy MSA files (just the query sequence)."""
+    import os
+    os.makedirs(msa_dir, exist_ok=True)
+    for fname in ["pairing.a3m", "non_pairing.a3m"]:
+        with open(os.path.join(msa_dir, fname), "w") as f:
+            f.write(f">query\n{sequence}\n")
+
+
+def _run_msa_search(sequences: Sequence[str], msa_dir: str, email: str = "") -> list:
+    """Run MMSeqs2 search for sequences, return list of result directories."""
+    import os
+    from protenix.web_service.colab_request_parser import RequestParser
+
+    os.makedirs(msa_dir, exist_ok=True)
+    seqs_sorted = sorted(set(sequences))
+    tmp_fasta = os.path.join(msa_dir, "msa_input.fasta")
+
+    RequestParser.msa_search(
+        seqs_pending_msa=seqs_sorted,
+        tmp_fasta_fpath=tmp_fasta,
+        msa_res_dir=msa_dir,
+        email=email,
+    )
+    return RequestParser.msa_postprocess(
+        seqs_pending_msa=seqs_sorted,
+        msa_res_dir=msa_dir,
+    )
+
+
+def featurize(
+    chains: Sequence[ChainInput],
+    name: str = "prediction",
+    email: str = "",
+) -> tuple[Dict[str, np.ndarray], "AtomArray", "TokenArray"]:
+    """Featurize a multi-chain complex for structure prediction.
+
+    Takes a sequence of ChainInputs and produces complete features ready
+    for the model. Handles everything:
+    - MSA: runs search if compute_msa=True, uses precomputed if provided,
+      otherwise uses dummy MSA (just the query sequence)
+    - Templates: extracts features from template chains if provided
+    - All standard Protenix featurization
+
+    Args:
+        chains: Sequence of ChainInput specifications. Each chain has:
+            - sequence: amino acid sequence
+            - compute_msa: whether to run MSA search (default True)
+            - precomputed_msa_dir: path to existing MSA (optional)
+            - template: gemmi.Chain with template coordinates (optional)
+        name: Name for the prediction.
+        email: Optional email for MSA service.
+
+    Returns:
+        Tuple of (features_dict, atom_array, token_array).
+        features_dict contains numpy arrays ready for JAX.
+
+    Example:
+        >>> import gemmi
+        >>> structure = gemmi.read_structure("template.pdb")
+        >>> chains = [
+        ...     ChainInput("ACDEFGHIKLMNPQRSTVWY", compute_msa=False, template=structure[0]['A']),
+        ...     ChainInput("GGGGGGGGGG", compute_msa=False),
+        ... ]
+        >>> features, atom_array, token_array = featurize(chains)
+    """
+    import tempfile
+    from collections import defaultdict
+    import torch
+    from protenix.data.json_to_feature import SampleDictToFeatures
+    from protenix.data.msa_featurizer import InferenceMSAFeaturizer
+    from protenix.data.utils import data_type_transform
+
+    # --- Build sample dict with MSA configuration ---
+
+    # Collect sequences needing MSA search
+    seqs_needing_search = []
+    for chain in chains:
+        if chain.compute_msa and chain.precomputed_msa_dir is None:
+            seqs_needing_search.append(chain.sequence)
+
+    # Run MSA search if needed
+    seq_to_msa_dir: Dict[str, str] = {}
+    if seqs_needing_search:
+        msa_tmpdir = tempfile.mkdtemp(prefix="protenix_msa_")
+        unique_seqs = sorted(set(seqs_needing_search))
+        msa_subdirs = _run_msa_search(unique_seqs, msa_tmpdir, email)
+        seq_to_msa_dir = dict(zip(unique_seqs, msa_subdirs))
+
+    # Build sequences list for sample dict
+    sequences = []
+    for i, chain in enumerate(chains):
+        protein_chain = {"sequence": chain.sequence, "count": 1}
+
+        if chain.precomputed_msa_dir is not None:
+            msa_dir = chain.precomputed_msa_dir
+        elif chain.compute_msa:
+            msa_dir = seq_to_msa_dir[chain.sequence]
+        else:
+            # Create dummy MSA
+            msa_dir = tempfile.mkdtemp(prefix=f"protenix_msa_dummy_{i}_")
+            _make_dummy_msa(chain.sequence, msa_dir)
+
+        protein_chain["msa"] = {
+            "precomputed_msa_dir": msa_dir,
+            "pairing_db": "uniref100",
+        }
+        sequences.append({"proteinChain": protein_chain})
+
+    sample = {"name": name, "sequences": sequences}
+
+    # --- Base featurization ---
+
+    sample2feat = SampleDictToFeatures(sample)
+    features_dict, atom_array, token_array = sample2feat.get_feature_dict()
+    features_dict["distogram_rep_atom_mask"] = torch.Tensor(
+        atom_array.distogram_rep_atom_mask
+    ).long()
+
+    # --- MSA featurization ---
+
+    # Build entity_to_asym_id mapping from atom_array
+    entity_to_asym_id: Dict[str, set] = defaultdict(set)
+    for entity_id, asym_id_int in zip(
+        atom_array.label_entity_id, atom_array.asym_id_int
+    ):
+        entity_to_asym_id[entity_id].add(asym_id_int)
+    entity_to_asym_id = dict(entity_to_asym_id)
+
+    # Load and process MSA features
+    msa_feats = InferenceMSAFeaturizer.make_msa_feature(
+        bioassembly=sequences,
+        entity_to_asym_id=entity_to_asym_id,
+        token_array=token_array,
+        atom_array=atom_array,
+    )
+    if msa_feats:
+        for k, v in msa_feats.items():
+            features_dict[k] = torch.from_numpy(v) if isinstance(v, np.ndarray) else v
+
+    # Apply data type transforms (still uses torch internally)
+    features_dict = data_type_transform(features_dict)
+
+    # --- Template features ---
+
+    templates = build_templates_from_chains(chains)
+    features_dict.update(templates.as_torch_dict())
+
+    # --- Convert to numpy ---
+
+    def to_numpy(v):
+        if isinstance(v, torch.Tensor):
+            return v.numpy()
+        elif isinstance(v, dict):
+            return {k2: to_numpy(v2) for k2, v2 in v.items()}
+        elif isinstance(v, np.ndarray):
+            return v
+        else:
+            return v
+
+    result = {k: to_numpy(v) for k, v in features_dict.items()}
+
+    # Add atom_rep_atom_idx (needed by JAX model)
+    result["atom_rep_atom_idx"] = result["distogram_rep_atom_mask"].nonzero()[0]
+
+    return result, atom_array, token_array
