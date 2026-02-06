@@ -111,6 +111,17 @@ class silu(AbstractFromTorch):
         return jax.nn.silu(x)
 
 
+@register_from_torch(torch.nn.Softmax)
+class softmax(eqx.Module):
+    dim: int
+
+    @staticmethod
+    def from_torch(m: torch.nn.Softmax):
+        return softmax(dim=m.dim)
+
+    def __call__(self, x):
+        return jax.nn.softmax(x, axis=self.dim)
+
 @register_from_torch(torch.nn.Identity)
 class Identity(AbstractFromTorch):
     def __call__(self, x):

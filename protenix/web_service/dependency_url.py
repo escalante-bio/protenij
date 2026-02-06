@@ -23,6 +23,8 @@ URL = {
     "protenix_mini_ism_v0.5.0": "https://af3-dev.tos-cn-beijing.volces.com/release_model/protenix_mini_ism_v0.5.0.pt",
     "esm2_t36_3B_UR50D_ism": "https://af3-dev.tos-cn-beijing.volces.com/release_model/esm2_t36_3B_UR50D_ism.pt",
     "esm2_t36_3B_UR50D_ism-contact-regression": "https://af3-dev.tos-cn-beijing.volces.com/release_model/esm2_t36_3B_UR50D_ism-contact-regression.pt",
+    "protenix_base_default_v1.0.0": "https://protenix.tos-cn-beijing.volces.com/checkpoint/protenix_base_default_v1.0.0.pt",
+    "protenix_base_20250630_v1.0.0": "https://protenix.tos-cn-beijing.volces.com/checkpoint/protenix_base_20250630_v1.0.0.pt",
     "ccd_components_file": "https://af3-dev.tos-cn-beijing.volces.com/release_data/components.v20240608.cif",
     "ccd_components_rdkit_mol_file": "https://af3-dev.tos-cn-beijing.volces.com/release_data/components.v20240608.cif.rdkit_mol.pkl",
     "pdb_cluster_file": "https://af3-dev.tos-cn-beijing.volces.com/release_data/clusters-by-entity-40.txt",

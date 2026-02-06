@@ -19,28 +19,23 @@ from typing import Any, Optional
 import torch
 import torch.nn as nn
 
+import torch.nn.functional as F
+
+from protenix.data.constants import STD_RESIDUES_WITH_GAP
 from protenix.model.modules.primitives import LinearNoBias, Transition
 from protenix.model.modules.transformer import AttentionPairBias
 from protenix.model.utils import (
+    expand_at_dim,
     pad_at_dim,
     sample_msa_feature_dict_random_without_replacement,
 )
-from protenix.openfold_local.model.dropout import DropoutRowwise
-from protenix.openfold_local.model.outer_product_mean import (
-    OuterProductMean,  # Alg 9 in AF3
-)
-from protenix.openfold_local.model.primitives import LayerNorm
-from protenix.openfold_local.model.triangular_attention import TriangleAttention
-from protenix.openfold_local.model.triangular_multiplicative_update import (
+from protenix.model.triangular.layers import DropoutRowwise, LayerNorm, OuterProductMean
+from protenix.model.triangular.triangular import (
+    TriangleAttention,
     TriangleMultiplicationIncoming,  # Alg 13 in AF3
-)
-from protenix.openfold_local.model.triangular_multiplicative_update import (
     TriangleMultiplicationOutgoing,  # Alg 12 in AF3
 )
-from protenix.openfold_local.utils.checkpointing import (
-    checkpoint_blocks,
-    get_checkpoint_fn,
-)
+from protenix.model.utils import checkpoint_blocks, get_checkpoint_fn
 
 
 class PairformerBlock(nn.Module):
@@ -59,6 +54,8 @@ class PairformerBlock(nn.Module):
         c_hidden_pair_att: int = 32,
         no_heads_pair: int = 4,
         dropout: float = 0.25,
+        hidden_scale_up: bool = False,
+        num_intermediate_factor: int = 4,
     ) -> None:
         """
         Args:
@@ -70,9 +67,14 @@ class PairformerBlock(nn.Module):
             c_hidden_pair_att (int, optional): hidden dim [for TriangleAttention]. Defaults to 32.
             no_heads_pair (int, optional): number of head [for TriangleAttention]. Defaults to 4.
             dropout (float, optional): dropout ratio [for TriangleUpdate]. Defaults to 0.25.
+            hidden_scale_up (bool, optional): whether to scale up hidden dims if c_z scales. Defaults to False.
+            num_intermediate_factor (int, optional): expansion factor for Transition hidden dim. Defaults to 4.
         """
         super(PairformerBlock, self).__init__()
         self.n_heads = n_heads
+        if hidden_scale_up:
+            no_heads_pair = c_z // c_hidden_pair_att
+            c_hidden_mul = c_z
         self.tri_mul_out = TriangleMultiplicationOutgoing(
             c_z=c_z, c_hidden=c_hidden_mul
         )
@@ -88,13 +90,13 @@ class PairformerBlock(nn.Module):
             no_heads=no_heads_pair,
         )
         self.dropout_row = DropoutRowwise(dropout)
-        self.pair_transition = Transition(c_in=c_z, n=4)
+        self.pair_transition = Transition(c_in=c_z, n=num_intermediate_factor)
         self.c_s = c_s
         if self.c_s > 0:
             self.attention_pair_bias = AttentionPairBias(
                 has_s=False, create_offset_ln_z=True, n_heads=n_heads, c_a=c_s, c_z=c_z
             )
-            self.single_transition = Transition(c_in=c_s, n=4)
+            self.single_transition = Transition(c_in=c_s, n=num_intermediate_factor)
 
     def forward(
         self,
@@ -216,6 +218,8 @@ class PairformerStack(nn.Module):
         c_s: int = 384,
         dropout: float = 0.25,
         blocks_per_ckpt: Optional[int] = None,
+        hidden_scale_up: bool = False,
+        num_intermediate_factor: int = 4,
     ) -> None:
         """
         Args:
@@ -228,6 +232,8 @@ class PairformerStack(nn.Module):
                 Size of each chunk. A higher value corresponds to fewer
                 checkpoints, and trades memory for speed. If None, no checkpointing
                 is performed.
+            hidden_scale_up (bool, optional): whether to scale up hidden dims if c_z scales. Defaults to False.
+            num_intermediate_factor (int, optional): expansion factor for Transition hidden dim. Defaults to 4.
         """
         super(PairformerStack, self).__init__()
         self.n_blocks = n_blocks
@@ -236,7 +242,11 @@ class PairformerStack(nn.Module):
         self.blocks = nn.ModuleList()
 
         for _ in range(n_blocks):
-            block = PairformerBlock(n_heads=n_heads, c_z=c_z, c_s=c_s, dropout=dropout)
+            block = PairformerBlock(
+                n_heads=n_heads, c_z=c_z, c_s=c_s, dropout=dropout,
+                hidden_scale_up=hidden_scale_up,
+                num_intermediate_factor=num_intermediate_factor,
+            )
             self.blocks.append(block)
 
     def _prep_blocks(
@@ -571,6 +581,7 @@ class MSABlock(nn.Module):
         pair_dropout: float = 0.25,
         msa_chunk_size: Optional[int] = 2048,
         msa_max_size: Optional[int] = 16384,
+        hidden_scale_up: bool = False,
     ) -> None:
         """
         Args:
@@ -580,6 +591,7 @@ class MSABlock(nn.Module):
             is_last_block (int): if this is the last block of MSAModule. Defaults to False.
             msa_dropout (float, optional): dropout ratio for msa block. Defaults to 0.15.
             pair_dropout (float, optional): dropout ratio for pair stack. Defaults to 0.25.
+            hidden_scale_up (bool, optional): whether to scale up hidden dims if c_z scales. Defaults to False.
         """
         super(MSABlock, self).__init__()
         self.c_m = c_m
@@ -599,7 +611,10 @@ class MSABlock(nn.Module):
                 msa_max_size=msa_max_size,
             )
         # Pair stack
-        self.pair_stack = PairformerBlock(c_z=c_z, c_s=0, dropout=pair_dropout)
+        self.pair_stack = PairformerBlock(
+            c_z=c_z, c_s=0, dropout=pair_dropout,
+            hidden_scale_up=hidden_scale_up,
+        )
 
     def forward(
         self,
@@ -678,6 +693,7 @@ class MSAModule(nn.Module):
         msa_chunk_size: Optional[int] = 2048,
         msa_max_size: Optional[int] = 16384,
         msa_configs: dict = None,
+        hidden_scale_up: bool = False,
     ) -> None:
         """Main Entry of MSAModule
 
@@ -744,6 +760,7 @@ class MSAModule(nn.Module):
                 pair_dropout=pair_dropout,
                 msa_chunk_size=self.msa_chunk_size,
                 msa_max_size=self.msa_max_size,
+                hidden_scale_up=hidden_scale_up,
             )
             self.blocks.append(block)
 
@@ -927,6 +944,8 @@ class TemplateEmbedder(nn.Module):
         c_z: int = 128,
         dropout: float = 0.25,
         blocks_per_ckpt: Optional[int] = None,
+        hidden_scale_up: bool = False,
+        num_intermediate_factor: int = 2,
     ) -> None:
         """
         Args:
@@ -939,6 +958,8 @@ class TemplateEmbedder(nn.Module):
                 checkpoint Size of each chunk. A higher value corresponds to fewer
                 checkpoints, and trades memory for speed. If None, no checkpointing
                 is performed.
+            hidden_scale_up (bool, optional): whether to scale up hidden dims if c_z scales. Defaults to False.
+            num_intermediate_factor (int, optional): expansion factor for Transition hidden dim. Defaults to 2.
         """
         super(TemplateEmbedder, self).__init__()
         self.n_blocks = n_blocks
@@ -970,20 +991,83 @@ class TemplateEmbedder(nn.Module):
             n_blocks=self.n_blocks,
             dropout=dropout,
             blocks_per_ckpt=blocks_per_ckpt,
+            hidden_scale_up=hidden_scale_up,
+            num_intermediate_factor=num_intermediate_factor,
         )
         self.layernorm_v = LayerNorm(self.c)
+        self.relu = nn.ReLU()
         self.linear_no_bias_u = LinearNoBias(in_features=self.c, out_features=self.c_z)
+
+    def single_template_forward(
+        self,
+        template_id: int,
+        input_feature_dict: dict[str, Any],
+        z: torch.Tensor,
+        pair_mask: Optional[torch.Tensor] = None,
+        multichain_mask: Optional[torch.Tensor] = None,
+        use_memory_efficient_kernel: bool = False,
+        use_deepspeed_evo_attention: bool = False,
+        use_lma: bool = False,
+        inplace_safe: bool = False,
+        chunk_size: Optional[int] = None,
+    ) -> torch.Tensor:
+        to_concat = []
+
+        dgram = input_feature_dict["template_distogram"][
+            template_id
+        ]  # [N_token, N_token, 39]
+        pseudo_beta_mask_2d = input_feature_dict["template_pseudo_beta_mask"][
+            template_id
+        ]
+        dgram = dgram * multichain_mask[..., None] * pair_mask[..., None]
+        pseudo_beta_mask_2d = (
+            pseudo_beta_mask_2d * multichain_mask * pair_mask
+        )  # [N_token, N_token]
+        to_concat.append(dgram)
+        to_concat.append(pseudo_beta_mask_2d.unsqueeze(-1))
+
+        aatype = input_feature_dict["template_aatype"][template_id]  # [N_token]
+        aatype = F.one_hot(aatype, num_classes=len(STD_RESIDUES_WITH_GAP))
+        to_concat.append(expand_at_dim(aatype, dim=-3, n=z.shape[0]))
+        to_concat.append(expand_at_dim(aatype, dim=-2, n=z.shape[0]))
+
+        unit_vector = input_feature_dict["template_unit_vector"][template_id]
+        unit_vector = (
+            unit_vector * multichain_mask[..., None] * pair_mask[..., None]
+        )  # [N_token, N_token, 3]
+        to_concat.append(unit_vector)
+
+        backbone_mask_2d = input_feature_dict["template_backbone_frame_mask"][
+            template_id
+        ]
+        backbone_mask_2d = backbone_mask_2d * multichain_mask * pair_mask
+        to_concat.append(backbone_mask_2d.unsqueeze(-1))
+
+        at = torch.concat(to_concat, dim=-1)
+        v = self.linear_no_bias_z(z) + self.linear_no_bias_a(at)
+        _, v = self.pairformer_stack(
+            s=None,
+            z=v,
+            pair_mask=pair_mask,
+            use_memory_efficient_kernel=use_memory_efficient_kernel,
+            use_deepspeed_evo_attention=use_deepspeed_evo_attention,
+            use_lma=use_lma,
+            inplace_safe=inplace_safe,
+            chunk_size=chunk_size,
+        )
+        v = self.layernorm_v(v)
+        return v
 
     def forward(
         self,
         input_feature_dict: dict[str, Any],
-        z: torch.Tensor,  # pylint: disable=W0613
-        pair_mask: torch.Tensor = None,  # pylint: disable=W0613
-        use_memory_efficient_kernel: bool = False,  # pylint: disable=W0613
-        use_deepspeed_evo_attention: bool = False,  # pylint: disable=W0613
-        use_lma: bool = False,  # pylint: disable=W0613
-        inplace_safe: bool = False,  # pylint: disable=W0613
-        chunk_size: Optional[int] = None,  # pylint: disable=W0613
+        z: torch.Tensor,
+        pair_mask: torch.Tensor = None,
+        use_memory_efficient_kernel: bool = False,
+        use_deepspeed_evo_attention: bool = False,
+        use_lma: bool = False,
+        inplace_safe: bool = False,
+        chunk_size: Optional[int] = None,
     ) -> torch.Tensor:
         """
         Args:
@@ -997,7 +1081,35 @@ class TemplateEmbedder(nn.Module):
             torch.Tensor: the template feature
                 [..., N_token, N_token, c_z]
         """
-        # In this version, we do not use TemplateEmbedder by setting n_blocks=0
-        if "template_restype" not in input_feature_dict or self.n_blocks < 1:
+        if "template_aatype" not in input_feature_dict or self.n_blocks < 1:
             return 0
-        return 0
+
+        asym_id = input_feature_dict["asym_id"]
+        multichain_mask = (asym_id[:, None] == asym_id[None, :]).to(z.dtype)
+
+        num_residues = z.shape[0]
+        num_templates = input_feature_dict["template_aatype"].shape[0]
+        query_num_channels = z.shape[-1]
+
+        if pair_mask is None:
+            pair_mask = z.new_ones(z.shape[:-1])
+
+        z = self.layernorm_z(z)
+        u = 0
+        for template_id in range(num_templates):
+            u = u + self.single_template_forward(
+                template_id=template_id,
+                input_feature_dict=input_feature_dict,
+                z=z,
+                pair_mask=pair_mask,
+                multichain_mask=multichain_mask,
+                use_memory_efficient_kernel=use_memory_efficient_kernel,
+                use_deepspeed_evo_attention=use_deepspeed_evo_attention,
+                use_lma=use_lma,
+                inplace_safe=inplace_safe,
+                chunk_size=chunk_size,
+            )
+        u = u / (1e-7 + num_templates)
+        u = self.linear_no_bias_u(self.relu(u))
+        assert u.shape == (num_residues, num_residues, query_num_channels)
+        return u

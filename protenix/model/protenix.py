@@ -28,7 +28,7 @@ from protenix.model.generator import (
     sample_diffusion_training,
 )
 from protenix.model.utils import simple_merge_dict_list
-from protenix.openfold_local.model.primitives import LayerNorm
+from protenix.model.triangular.layers import LayerNorm
 from protenix.utils.logger import get_logger
 from protenix.utils.permutation.permutation import SymmetricPermutation
 from protenix.utils.torch_utils import autocasting_disable_decorator
@@ -127,6 +127,8 @@ class Protenix(nn.Module):
         N_cycle: int,
         inplace_safe: bool = False,
         chunk_size: Optional[int] = None,
+        mc_dropout: bool = False,
+        mc_dropout_rate: float = 0.0,
     ) -> tuple[torch.Tensor, ...]:
         """
         The forward pass from the input to pairformer output

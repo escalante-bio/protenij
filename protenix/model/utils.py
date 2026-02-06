@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Optional, Union
+from typing import Any, Callable, List, Optional, Union
 
 import numpy as np
 import torch
@@ -484,3 +484,11 @@ def simple_merge_dict_list(dict_list: list[dict]) -> dict:
     for k, v in merged_dict.items():
         merged_dict[k] = np.concatenate(v)
     return merged_dict
+
+
+# Re-export checkpointing and chunking utilities (previously in openfold_local/utils/)
+from protenix.openfold_local.utils.checkpointing import (
+    checkpoint_blocks,
+    get_checkpoint_fn,
+)
+from protenix.openfold_local.utils.chunk_utils import chunk_layer

@@ -25,8 +25,8 @@ from protenix.model.modules.transformer import (
     DiffusionTransformer,
 )
 from protenix.model.utils import expand_at_dim
-from protenix.openfold_local.model.primitives import LayerNorm
-from protenix.openfold_local.utils.checkpointing import get_checkpoint_fn
+from protenix.model.triangular.layers import LayerNorm
+from protenix.model.utils import get_checkpoint_fn
 
 
 class DiffusionConditioning(nn.Module):

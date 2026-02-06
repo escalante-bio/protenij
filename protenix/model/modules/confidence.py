@@ -20,7 +20,7 @@ import torch.nn as nn
 from protenix.model.modules.pairformer import PairformerStack
 from protenix.model.modules.primitives import LinearNoBias
 from protenix.model.utils import broadcast_token_to_atom, one_hot
-from protenix.openfold_local.model.primitives import LayerNorm
+from protenix.model.triangular.layers import LayerNorm
 
 
 class ConfidenceHead(nn.Module):
@@ -45,6 +45,7 @@ class ConfidenceHead(nn.Module):
         distance_bin_end: float = 52.0,
         distance_bin_step: float = 1.25,
         stop_gradient: bool = True,
+        hidden_scale_up: bool = False,
     ) -> None:
         """
         Args:
@@ -101,6 +102,7 @@ class ConfidenceHead(nn.Module):
             n_blocks=n_blocks,
             dropout=pairformer_dropout,
             blocks_per_ckpt=blocks_per_ckpt,
+            hidden_scale_up=hidden_scale_up,
         )
         self.linear_no_bias_pae = LinearNoBias(
             in_features=self.c_z, out_features=self.b_pae

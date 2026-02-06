@@ -18,18 +18,14 @@ from .backend import (
 )
 
 import protenix
-import protenix.openfold_local
-import protenix.openfold_local.model
-import protenix.openfold_local.model.primitives
 import protenix.model
 import protenix.model.modules
 import protenix.model.modules.primitives
-import protenix.openfold_local.model.dropout
-import protenix.openfold_local.model.triangular_multiplicative_update
-import protenix.openfold_local.model.triangular_attention
+import protenix.model.triangular
+import protenix.model.triangular.layers
+import protenix.model.triangular.triangular
 import protenix.model.modules.transformer
 import protenix.model.modules.pairformer
-import protenix.openfold_local.model.outer_product_mean
 import protenix.model.modules.embedders
 import protenix.model.modules.head
 import protenix.model.modules.diffusion
@@ -235,7 +231,7 @@ def rearrange_qk_to_dense_trunk(
     return q_trunked, k_trunked, padding_info
 
 
-register_from_torch(protenix.openfold_local.model.primitives.OpenFoldLayerNorm)(
+register_from_torch(protenix.model.triangular.layers.OpenFoldLayerNorm)(
     backend.LayerNorm
 )
 
@@ -254,7 +250,7 @@ class Transition(AbstractFromTorch):
         return self.linear_no_bias(jax.nn.silu(a) * b)
 
 
-@register_from_torch(protenix.openfold_local.model.dropout.Dropout)
+@register_from_torch(protenix.model.triangular.layers.Dropout)
 class Dropout(eqx.Module):
     rate: float
     batch_dim: list[int]
@@ -279,12 +275,12 @@ class Dropout(eqx.Module):
         return x * bools * (1 / (1 - self.rate))
 
     @staticmethod
-    def from_torch(d: protenix.openfold_local.model.dropout.Dropout):
+    def from_torch(d: protenix.model.triangular.layers.Dropout):
         return Dropout(d.r, d.batch_dim)
 
 
 @register_from_torch(
-    protenix.openfold_local.model.triangular_multiplicative_update.TriangleMultiplicativeUpdate
+    protenix.model.triangular.triangular.TriangleMultiplicativeUpdate
 )
 class TriangleMultiplication(AbstractFromTorch):
     linear_a_p: backend.Linear
@@ -326,14 +322,13 @@ class TriangleMultiplication(AbstractFromTorch):
 
         x = self.layer_norm_out(x)
         x = self.linear_z(x)
-        # NOTE: THE FOLLOWING IS A BUG? ROUGHLY
-        # we apply directly to the residual stream?
-        g = self.sigmoid(self.linear_g(z_in))
+        # Gate uses layer_norm'd z, not z_in (matches PyTorch)
+        g = self.sigmoid(self.linear_g(z))
 
         return x * g
 
 
-@register_from_torch(protenix.openfold_local.model.primitives.Attention)
+@register_from_torch(protenix.model.triangular.layers.Attention)
 class Attention(AbstractFromTorch):
     c_q: int  # input dimension of query
     c_k: int  # input dimension of key
@@ -398,7 +393,7 @@ class Attention(AbstractFromTorch):
 
 
 @register_from_torch(
-    protenix.openfold_local.model.triangular_attention.TriangleAttention
+    protenix.model.triangular.triangular.TriangleAttention
 )
 class TriangleAttention(AbstractFromTorch):
     starting: bool
@@ -864,6 +859,8 @@ class Pairformer(eqx.Module):
     @staticmethod
     def from_torch(m: protenix.model.modules.pairformer.PairformerStack):
         layers = [from_torch(layer) for layer in m.blocks]
+        if len(layers) == 0:
+            return Pairformer(None, None)
         _, static = eqx.partition(layers[0], eqx.is_inexact_array)
         return Pairformer(
             jax.tree.map(
@@ -885,7 +882,7 @@ class Pairformer(eqx.Module):
         return jax.lax.scan(body_fn, (s, z, key), self.stacked_parameters)[0][:2]
 
 
-@register_from_torch(protenix.openfold_local.model.outer_product_mean.OuterProductMean)
+@register_from_torch(protenix.model.triangular.layers.OuterProductMean)
 class OuterProductMean(AbstractFromTorch):
     layer_norm: LayerNorm
     linear_1: Linear
@@ -926,18 +923,71 @@ class OuterProductMean(AbstractFromTorch):
         return outer / norm
 
 
+@register_from_torch(protenix.model.modules.pairformer.MSAPairWeightedAveraging)
+class MSAPairWeightedAveraging(AbstractFromTorch):
+    c_m: int
+    c: int
+    n_heads: int
+    c_z: int
+    layernorm_m: LayerNorm
+    linear_no_bias_mv: Linear
+    layernorm_z: LayerNorm
+    linear_no_bias_z: Linear
+    linear_no_bias_mg: Linear
+    softmax_w: any
+    linear_no_bias_out: Linear
+
+    def __call__(self, m, z):
+        m = self.layernorm_m(m)
+        v = self.linear_no_bias_mv(m)
+        v = v.reshape(*v.shape[:-1], self.n_heads, self.c)
+        b = self.linear_no_bias_z(self.layernorm_z(z))
+        w = self.softmax_w(b)
+        o = jnp.einsum("...ijh,...sjhc->...sihc", w, v)
+        o = o.reshape(*o.shape[:-2], self.n_heads * self.c)
+        g = jax.nn.sigmoid(self.linear_no_bias_mg(m))
+        m = self.linear_no_bias_out(g * o)
+        return m
+
+
+@register_from_torch(protenix.model.modules.pairformer.MSAStack)
+class MSAStack(AbstractFromTorch):
+    c: int
+    msa_pair_weighted_averaging: MSAPairWeightedAveraging
+    dropout_row: any
+    transition_m: Transition
+
+    def __call__(self, m, z, *, key):
+        m = m + self.msa_pair_weighted_averaging(m, z)
+        m = m + self.transition_m(m)
+        return m
+
+
 @register_from_torch(protenix.model.modules.pairformer.MSABlock)
-class MSABlock(AbstractFromTorch):
+class MSABlock(eqx.Module):
     c_m: int
     c_z: int
     outer_product_mean_msa: OuterProductMean
+    msa_stack: MSAStack | None
     pair_stack: PairformerBlock
 
+    @staticmethod
+    def from_torch(m: protenix.model.modules.pairformer.MSABlock):
+        msa_stack = from_torch(m.msa_stack) if hasattr(m, "msa_stack") else None
+        return MSABlock(
+            c_m=m.c_m,
+            c_z=m.c_z,
+            outer_product_mean_msa=from_torch(m.outer_product_mean_msa),
+            msa_stack=msa_stack,
+            pair_stack=from_torch(m.pair_stack),
+        )
+
     def __call__(self, m, z, pair_mask, *, key):
-        #with jax.default_matmul_precision("float32"):
         z = z + self.outer_product_mean_msa(m)
+        if self.msa_stack is not None:
+            m = self.msa_stack(m, z, key=key)
         _, z = self.pair_stack(s=None, z=z, pair_mask=pair_mask, key=key)
-        return None, z
+        return m, z
 
 
 def sample_msa_feature_dict_random_without_replacement(
@@ -968,7 +1018,10 @@ def sample_msa_feature_dict_random_without_replacement(
 class MSAModule(eqx.Module):
     linear_no_bias_m: Linear
     linear_no_bias_s: Linear
-    blocks: any
+    # MSABlocks have heterogeneous tree structure (some have msa_stack, some don't)
+    # so we store them as a list rather than trying to stack for scan.
+    # With only 1-4 blocks, the JIT overhead is minimal.
+    blocks: list[MSABlock]
     msa_configs: dict
     training: bool
     input_feature: dict
@@ -1005,6 +1058,7 @@ class MSAModule(eqx.Module):
         )
         msa_sample = self.linear_no_bias_m(msa_sample)
         msa_sample = msa_sample + self.linear_no_bias_s(s_inputs)
+
         for block in self.blocks:
             key = jax.random.fold_in(key, 1)
             msa_sample, z = block(msa_sample, z, pair_mask, key=key)
@@ -1015,10 +1069,11 @@ class MSAModule(eqx.Module):
     def from_torch(
         m: protenix.model.modules.pairformer.MSAModule,
     ):
+        blocks = [from_torch(block) for block in m.blocks]
         return MSAModule(
             linear_no_bias_m=from_torch(m.linear_no_bias_m),
             linear_no_bias_s=from_torch(m.linear_no_bias_s),
-            blocks=from_torch(m.blocks),
+            blocks=blocks,
             msa_configs=m.msa_configs,
             training=m.training,
             input_feature=from_torch(m.input_feature),
@@ -1916,6 +1971,90 @@ def sample_diffusion(
     return x_l
 
 
+@register_from_torch(protenix.model.modules.pairformer.TemplateEmbedder)
+class TemplateEmbedder(AbstractFromTorch):
+    n_blocks: int
+    c: int
+    c_z: int
+    input_feature1: dict
+    input_feature2: dict
+    distogram: dict
+    inf: float
+    linear_no_bias_z: Linear
+    layernorm_z: LayerNorm
+    linear_no_bias_a: Linear
+    pairformer_stack: Pairformer
+    layernorm_v: LayerNorm
+    relu: any
+    linear_no_bias_u: Linear
+
+    def __call__(self, input_feature_dict, z, pair_mask=None, *, key):
+        if "template_aatype" not in input_feature_dict or self.n_blocks < 1:
+            return jnp.zeros_like(z)
+
+        asym_id = input_feature_dict["asym_id"]
+        multichain_mask = (asym_id[:, None] == asym_id[None, :]).astype(z.dtype)
+
+        num_residues = z.shape[0]
+        num_templates = input_feature_dict["template_aatype"].shape[0]
+        query_num_channels = z.shape[-1]
+
+        if pair_mask is None:
+            pair_mask = jnp.ones(z.shape[:-1])
+
+        z_normed = self.layernorm_z(z)
+        u = jnp.zeros_like(z_normed[..., :self.c])
+
+        # Stack template features for scan: shapes are (N_templates, ...)
+        template_xs = (
+            input_feature_dict["template_distogram"],
+            input_feature_dict["template_pseudo_beta_mask"],
+            input_feature_dict["template_aatype"],
+            input_feature_dict["template_unit_vector"],
+            input_feature_dict["template_backbone_frame_mask"],
+        )
+
+        def body_fn(carry, xs):
+            u, key = carry
+            dgram, pseudo_beta_mask_2d, aatype, unit_vector, backbone_mask_2d = xs
+            key = jax.random.fold_in(key, 1)
+
+            # Apply masks
+            dgram = dgram * multichain_mask[..., None] * pair_mask[..., None]
+            pseudo_beta_mask_2d = pseudo_beta_mask_2d * multichain_mask * pair_mask
+
+            # One-hot encode aatype
+            aatype = jax.nn.one_hot(aatype, 32)  # (N_token, 32)
+
+            # Apply masks to unit_vector and backbone_mask
+            unit_vector = unit_vector * multichain_mask[..., None] * pair_mask[..., None]
+            backbone_mask_2d = backbone_mask_2d * multichain_mask * pair_mask
+
+            # Concatenate all features
+            to_concat = [
+                dgram,
+                pseudo_beta_mask_2d[..., None],
+                # expand_at_dim(aatype, dim=-3): (1, N_token, 32) → (N_token, N_token, 32)
+                jnp.broadcast_to(aatype[None, :, :], (z.shape[0], *aatype.shape)),
+                # expand_at_dim(aatype, dim=-2): (N_token, 1, 32) → (N_token, N_token, 32)
+                jnp.broadcast_to(aatype[:, None, :], (aatype.shape[0], z.shape[0], aatype.shape[-1])),
+                unit_vector,
+                backbone_mask_2d[..., None],
+            ]
+            at = jnp.concatenate(to_concat, axis=-1)
+            v = self.linear_no_bias_z(z_normed) + self.linear_no_bias_a(at)
+            _, v = self.pairformer_stack(s=None, z=v, pair_mask=pair_mask, key=key)
+            v = self.layernorm_v(v)
+            u = u + v
+            return (u, key), None
+
+        (u, _), _ = jax.lax.scan(body_fn, (u, key), template_xs)
+
+        u = u / (1e-7 + num_templates)
+        u = self.linear_no_bias_u(jax.nn.relu(u))
+        return u
+
+
 @register_from_torch(protenix.model.modules.confidence.ConfidenceHead)
 class ConfidenceHead(AbstractFromTorch):
     b_pae: int
@@ -1963,8 +2102,7 @@ class ConfidenceHead(AbstractFromTorch):
                 ((x_pred_rep_coords[..., None, :] - x_pred_rep_coords[..., None, :, :]) ** 2 + 1E-9).sum( axis=-1)
             )  # [..., N_tokens, N_tokens]
             z_pair += self.linear_no_bias_d(
-                (distance_pred[..., None] > self.lower_bins) * (distance_pred[..., None] < self.upper_bins)
-
+                ((distance_pred[..., None] > self.lower_bins) * (distance_pred[..., None] < self.upper_bins)).astype(jnp.float32)
             )  # [..., N_tokens, N_tokens, c_z]
             z_pair += self.linear_no_bias_d_wo_onehot(
                 distance_pred[..., None],
@@ -2034,6 +2172,7 @@ class Outputs(eqx.Module):
 class Protenix(eqx.Module):
     input_embedder: InputFeatureEmbedder
     relative_position_encoding: RelativePositionEncoding
+    template_embedder: TemplateEmbedder
     msa_module: MSAModule
     pairformer_stack: Pairformer
     distogram_head: DistogramHead
@@ -2059,6 +2198,7 @@ class Protenix(eqx.Module):
         return Protenix(
             input_embedder=from_torch(m.input_embedder),
             relative_position_encoding=from_torch(m.relative_position_encoding),
+            template_embedder=from_torch(m.template_embedder),
             msa_module=from_torch(m.msa_module),
             pairformer_stack=from_torch(m.pairformer_stack),
             distogram_head=from_torch(m.distogram_head),
@@ -2111,6 +2251,10 @@ class Protenix(eqx.Module):
             state = jax.lax.stop_gradient(state)  # Prevent gradient flow through recycling
             s,z = state.s, state.z
             z = initial_embedding.z_init + self.linear_no_bias_z_cycle(self.layernorm_z_cycle(z))
+            if self.template_embedder.n_blocks > 0:
+                z = z + self.template_embedder(
+                    input_feature_dict, z, pair_mask=None, key=key
+                )
             z = self.msa_module(
                 input_feature_dict, z, initial_embedding.s_inputs, pair_mask=None, key=key
             )

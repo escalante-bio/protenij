@@ -33,8 +33,8 @@ from protenix.model.utils import (
     broadcast_token_to_atom,
     permute_final_dims,
 )
-from protenix.openfold_local.model.primitives import LayerNorm
-from protenix.openfold_local.utils.checkpointing import checkpoint_blocks
+from protenix.model.triangular.layers import LayerNorm
+from protenix.model.utils import checkpoint_blocks
 
 
 class AttentionPairBias(nn.Module):

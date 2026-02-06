@@ -170,6 +170,9 @@ model_configs = {
         "N_step_mini_rollout": 20,
         "N_sample_mini_rollout": 1,
     },
+    "mc_dropout_apply_rate": 0.4,
+    "mc_dropout_rate": 0.4,
+    "hidden_scale_up": False,
     "model": {
         "N_model_seed": 1,  # for inference
         "N_cycle": 4,
@@ -191,6 +194,7 @@ model_configs = {
             "n_blocks": 0,
             "dropout": 0.25,
             "blocks_per_ckpt": GlobalConfigValue("blocks_per_ckpt"),
+            "hidden_scale_up": GlobalConfigValue("hidden_scale_up"),
         },
         "msa_module": {
             "c_m": 64,
@@ -200,6 +204,7 @@ model_configs = {
             "msa_dropout": 0.15,
             "pair_dropout": 0.25,
             "blocks_per_ckpt": GlobalConfigValue("blocks_per_ckpt"),
+            "hidden_scale_up": GlobalConfigValue("hidden_scale_up"),
             "msa_chunk_size": ValueMaybeNone(2048),
         },
         # Optional constraint embedder, only used when constraint is enabled.
@@ -236,6 +241,7 @@ model_configs = {
             "n_heads": 16,
             "dropout": 0.25,
             "blocks_per_ckpt": GlobalConfigValue("blocks_per_ckpt"),
+            "hidden_scale_up": GlobalConfigValue("hidden_scale_up"),
         },
         "diffusion_module": {
             "use_fine_grained_checkpoint": True,
@@ -272,6 +278,7 @@ model_configs = {
             "distance_bin_end": 52.0,
             "distance_bin_step": 1.25,
             "stop_gradient": True,
+            "hidden_scale_up": GlobalConfigValue("hidden_scale_up"),
         },
         "distogram_head": {
             "c_z": GlobalConfigValue("c_z"),
