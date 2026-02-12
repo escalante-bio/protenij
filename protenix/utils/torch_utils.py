@@ -12,13 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 from contextlib import nullcontext
 from typing import Sequence, Union
 
 import numpy as np
-import torch
-from torch import nn
-from torch.nn.parameter import Parameter
+
+try:
+    import torch
+    from torch import nn
+    from torch.nn.parameter import Parameter
+    _HAS_TORCH = True
+except ImportError:
+    _HAS_TORCH = False
 
 
 def grad_norm(params):
@@ -226,7 +233,20 @@ def autocasting_disable_decorator(disable_casting):
     return func_wrapper
 
 
+def dict_to_numpy(feature_dict):
+    """Convert dict values to numpy arrays with appropriate dtypes."""
+    for k, v in feature_dict.items():
+        if isinstance(v, np.ndarray):
+            if v.dtype in [np.int64, np.int32]:
+                feature_dict[k] = v.astype(np.int64)
+            elif v.dtype in [np.float32, np.float64]:
+                feature_dict[k] = v.astype(np.float32)
+    return feature_dict
+
+
 def dict_to_tensor(feature_dict):
+    if not _HAS_TORCH:
+        raise ImportError("torch is required for dict_to_tensor(); use dict_to_numpy() instead")
     for k, v in feature_dict.items():
         if not isinstance(v, torch.Tensor):
             dtype = feature_dict[k].dtype

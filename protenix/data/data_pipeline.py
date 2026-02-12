@@ -21,7 +21,6 @@ from typing import Any, Optional, Union
 import biotite.structure.io as strucio
 import numpy as np
 import pandas as pd
-import torch
 from biotite.structure import AtomArray
 
 from protenix.data.msa_featurizer import MSAFeaturizer
@@ -29,8 +28,6 @@ from protenix.data.parser import DistillationMMCIFParser, MMCIFParser
 from protenix.data.tokenizer import AtomArrayTokenizer, TokenArray
 from protenix.utils.cropping import CropData
 from protenix.utils.file_io import load_gzip_pickle
-
-torch.multiprocessing.set_sharing_strategy("file_system")
 
 
 class DataPipeline(object):

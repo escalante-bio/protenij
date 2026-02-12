@@ -12,13 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 import copy
 import random
 from collections import defaultdict
 from typing import Any, Optional
 
 import numpy as np
-import torch
+try:
+    import torch
+    _HAS_TORCH = True
+except ImportError:
+    _HAS_TORCH = False
 from biotite.structure import AtomArray
 from scipy.spatial.distance import cdist
 

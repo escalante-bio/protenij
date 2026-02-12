@@ -3,6 +3,18 @@
 Translation of [Protenix](https://github.com/bytedance/Protenix) to JAX/Equinox.
 This is pretty rough, we suggest using it through [mosaic](https://github.com/escalante-bio/mosaic).
 
+## Installation
+
+PyTorch is an **optional** dependency. The full inference pipeline (featurization, model loading, structure prediction) runs without it.
+
+```bash
+# Inference only (no PyTorch)
+uv sync
+
+# With PyTorch (needed for converting checkpoints from the original Protenix format)
+uv sync --extra torch
+```
+
 ## Serialized models
 
 Pre-converted Equinox models skip the PyTorch dependency entirely and load in under a second.
@@ -29,7 +41,10 @@ model = load_model("~/.protenix/protenix_base_default_v1.0.0")
 
 ### Translating from a PyTorch checkpoint
 
+Requires the `torch` extra.
+
 ```bash
+uv sync --extra torch
 python translate_models.py
 ```
 

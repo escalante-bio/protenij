@@ -12,14 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 import copy
 import hashlib
 from typing import Any
 
 import numpy as np
 import pandas as pd
-import torch
-import torch.nn.functional as F
+try:
+    import torch
+    import torch.nn.functional as F
+    _HAS_TORCH = True
+except ImportError:
+    _HAS_TORCH = False
 from biotite.structure import AtomArray
 from scipy.spatial.distance import cdist
 
@@ -198,6 +204,11 @@ class ConstraintFeatureGenerator:
         constraint_param: dict,
     ) -> tuple[dict[str, Any], TokenArray, AtomArray]:
         feature_dict = {}
+
+        # When no constraints are specified and torch is not available,
+        # return empty features immediately (common inference case).
+        if not _HAS_TORCH and not constraint_param:
+            return feature_dict, token_array, atom_array
 
         # build atom-level contact features
         contact_inputs = [

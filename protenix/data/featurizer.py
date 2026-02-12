@@ -17,7 +17,6 @@ from collections import defaultdict
 from typing import Optional, Union
 
 import numpy as np
-import torch
 from biotite.structure import Atom, AtomArray, get_residue_starts
 from sklearn.neighbors import KDTree
 
@@ -51,7 +50,7 @@ class Featurizer(object):
     @staticmethod
     def encoder(
         encode_def_dict_or_list: Optional[Union[dict, list[str]]], input_list: list[str]
-    ) -> torch.Tensor:
+    ) -> np.ndarray:
         """
         Encode a list of input values into a binary format using a specified encoding definition list.
 
@@ -60,7 +59,7 @@ class Featurizer(object):
             input_list (list): A list of input values to be encoded.
 
         Returns:
-            torch.Tensor: A tensor representing the binary encoding of the input values.
+            np.ndarray: A tensor representing the binary encoding of the input values.
         """
         num_keys = len(encode_def_dict_or_list)
         if isinstance(encode_def_dict_or_list, dict):
@@ -79,11 +78,11 @@ class Featurizer(object):
             key: [int(i == idx) for i in range(num_keys)] for key, idx in items
         }
         onehot_encoded_data = [onehot_dict[item] for item in input_list]
-        onehot_tensor = torch.Tensor(onehot_encoded_data)
+        onehot_tensor = np.asarray(onehot_encoded_data, dtype=np.float32)
         return onehot_tensor
 
     @staticmethod
-    def restype_onehot_encoded(restype_list: list[str]) -> torch.Tensor:
+    def restype_onehot_encoded(restype_list: list[str]) -> np.ndarray:
         """
         Ref: AlphaFold3 SI Table 5 "restype"
         One-hot encoding of the sequence. 32 possible values: 20 amino acids + unknown,
@@ -95,13 +94,13 @@ class Featurizer(object):
                                       The residue type of ligand should be "UNK" in the input list.
 
         Returns:
-            torch.Tensor:  A Tensor of one-hot encoded residue types
+            np.ndarray:  A Tensor of one-hot encoded residue types
         """
 
         return Featurizer.encoder(STD_RESIDUES_WITH_GAP, restype_list)
 
     @staticmethod
-    def elem_onehot_encoded(elem_list: list[str]) -> torch.Tensor:
+    def elem_onehot_encoded(elem_list: list[str]) -> np.ndarray:
         """
         Ref: AlphaFold3 SI Table 5 "ref_element"
         One-hot encoding of the element atomic number for each atom
@@ -111,12 +110,12 @@ class Featurizer(object):
             elem_list (List[str]): A list of element symbols.
 
         Returns:
-            torch.Tensor:  A Tensor of one-hot encoded elements
+            np.ndarray:  A Tensor of one-hot encoded elements
         """
         return Featurizer.encoder(get_all_elems(), elem_list)
 
     @staticmethod
-    def ref_atom_name_chars_encoded(atom_names: list[str]) -> torch.Tensor:
+    def ref_atom_name_chars_encoded(atom_names: list[str]) -> np.ndarray:
         """
         Ref: AlphaFold3 SI Table 5 "ref_atom_name_chars"
         One-hot encoding of the unique atom names in the reference conformer.
@@ -126,7 +125,7 @@ class Featurizer(object):
             atom_name_list (List[str]): A list of atom names.
 
         Returns:
-            torch.Tensor:  A Tensor of character encoded atom names
+            np.ndarray:  A Tensor of character encoded atom names
         """
         onehot_dict = {}
         for index, key in enumerate(range(64)):
@@ -141,7 +140,7 @@ class Featurizer(object):
             for name_str in atom_name.ljust(4):
                 atom_encode.append(onehot_dict[ord(name_str) - 32])
             mol_encode.append(atom_encode)
-        onehot_tensor = torch.Tensor(mol_encode)
+        onehot_tensor = np.asarray(mol_encode, dtype=np.float32)
         return onehot_tensor
 
     @staticmethod
@@ -182,8 +181,8 @@ class Featurizer(object):
         token: Token,
         centre_atom: Atom,
         lig_res_ref_conf_kdtree: dict[str, tuple[KDTree, list[int]]],
-        ref_pos: torch.Tensor,
-        ref_mask: torch.Tensor,
+        ref_pos: np.ndarray,
+        ref_mask: np.ndarray,
     ) -> tuple[int, list[int]]:
         """
         Ref: AlphaFold3 SI Chapter 4.3.2
@@ -193,8 +192,8 @@ class Featurizer(object):
             token (Token): Token object.
             centre_atom (Atom): Biotite Atom object of Token centre atom.
             lig_res_ref_conf_kdtree (Dict[str, Tuple[KDTree, List[int]]]): A dictionary of KDTree objects and atom indices.
-            ref_pos (torch.Tensor): Atom positions in the reference conformer. Size=[N_atom, 3]
-            ref_mask (torch.Tensor): Mask indicating which atom slots are used in the reference conformer. Size=[N_atom]
+            ref_pos (np.ndarray): Atom positions in the reference conformer. Size=[N_atom, 3]
+            ref_mask (np.ndarray): Mask indicating which atom slots are used in the reference conformer. Size=[N_atom]
 
         Returns:
             tuple[int, List[int]]:
@@ -239,8 +238,8 @@ class Featurizer(object):
     def get_token_frame(
         token_array: TokenArray,
         atom_array: AtomArray,
-        ref_pos: torch.Tensor,
-        ref_mask: torch.Tensor,
+        ref_pos: np.ndarray,
+        ref_mask: np.ndarray,
     ) -> TokenArray:
         """
         Ref: AlphaFold3 SI Chapter 4.3.2
@@ -259,8 +258,8 @@ class Featurizer(object):
         Args:
             token_array (TokenArray): A list of tokens.
             atom_array (AtomArray): An atom array.
-            ref_pos (torch.Tensor): Atom positions in the reference conformer. Size=[N_atom, 3]
-            ref_mask (torch.Tensor): Mask indicating which atom slots are used in the reference conformer. Size=[N_atom]
+            ref_pos (np.ndarray): Atom positions in the reference conformer. Size=[N_atom, 3]
+            ref_mask (np.ndarray): Mask indicating which atom slots are used in the reference conformer. Size=[N_atom]
 
         Returns:
             TokenArray: A TokenArray with updated frame annotations.
@@ -309,7 +308,7 @@ class Featurizer(object):
             token.frame_atom_index = frame_atom_index
         return token_array_w_frame
 
-    def get_token_features(self) -> dict[str, torch.Tensor]:
+    def get_token_features(self) -> dict[str, np.ndarray]:
         """
         Ref: AlphaFold3 SI Chapter 2.8
 
@@ -317,7 +316,7 @@ class Featurizer(object):
         The size of these features is [N_token].
 
         Returns:
-            Dict[str, torch.Tensor]: A dict of token features.
+            Dict[str, np.ndarray]: A dict of token features.
         """
         token_features = {}
 
@@ -329,18 +328,18 @@ class Featurizer(object):
         restype = centre_atoms.cano_seq_resname
         restype_onehot = self.restype_onehot_encoded(restype)
 
-        token_features["token_index"] = torch.arange(0, len(self.cropped_token_array))
-        token_features["residue_index"] = torch.Tensor(
-            centre_atoms.res_id.astype(int)
-        ).long()
-        token_features["asym_id"] = torch.Tensor(centre_atoms.asym_id_int).long()
-        token_features["entity_id"] = torch.Tensor(centre_atoms.entity_id_int).long()
-        token_features["sym_id"] = torch.Tensor(centre_atoms.sym_id_int).long()
+        token_features["token_index"] = np.arange(0, len(self.cropped_token_array))
+        token_features["residue_index"] = np.asarray(
+            centre_atoms.res_id, dtype=np.int64
+        )
+        token_features["asym_id"] = np.asarray(centre_atoms.asym_id_int, dtype=np.int64)
+        token_features["entity_id"] = np.asarray(centre_atoms.entity_id_int, dtype=np.int64)
+        token_features["sym_id"] = np.asarray(centre_atoms.sym_id_int, dtype=np.int64)
         token_features["restype"] = restype_onehot
 
         return token_features
 
-    def get_chain_perm_features(self) -> dict[str, torch.Tensor]:
+    def get_chain_perm_features(self) -> dict[str, np.ndarray]:
         """
         The chain permutation use "entity_mol_id", "mol_id" and "mol_atom_index"
         instead of the "entity_id", "asym_id" and "residue_index".
@@ -348,19 +347,19 @@ class Featurizer(object):
         The shape of these features is [N_atom].
 
         Returns:
-            Dict[str, torch.Tensor]: A dict of chain permutation features.
+            Dict[str, np.ndarray]: A dict of chain permutation features.
         """
 
         chain_perm_features = {}
-        chain_perm_features["mol_id"] = torch.Tensor(
-            self.cropped_atom_array.mol_id
-        ).long()
-        chain_perm_features["mol_atom_index"] = torch.Tensor(
-            self.cropped_atom_array.mol_atom_index
-        ).long()
-        chain_perm_features["entity_mol_id"] = torch.Tensor(
-            self.cropped_atom_array.entity_mol_id
-        ).long()
+        chain_perm_features["mol_id"] = np.asarray(
+            self.cropped_atom_array.mol_id, dtype=np.int64
+        )
+        chain_perm_features["mol_atom_index"] = np.asarray(
+            self.cropped_atom_array.mol_atom_index, dtype=np.int64
+        )
+        chain_perm_features["entity_mol_id"] = np.asarray(
+            self.cropped_atom_array.entity_mol_id, dtype=np.int64
+        )
         return chain_perm_features
 
     def get_renamed_atom_names(self) -> np.ndarray:
@@ -387,7 +386,7 @@ class Featurizer(object):
             new_atom_names[start:stop] = new_res_atom_names
         return new_atom_names
 
-    def get_reference_features(self) -> dict[str, torch.Tensor]:
+    def get_reference_features(self) -> dict[str, np.ndarray]:
         """
         Ref: AlphaFold3 SI Chapter 2.8
 
@@ -395,7 +394,7 @@ class Featurizer(object):
         The size of these features is [N_atom].
 
         Returns:
-            Dict[str, torch.Tensor]: a dict of reference features.
+            Dict[str, np.ndarray]: a dict of reference features.
         """
         ref_pos = []
         for ref_space_uid in np.unique(self.cropped_atom_array.ref_space_uid):
@@ -410,14 +409,14 @@ class Featurizer(object):
         ref_pos = np.concatenate(ref_pos)
 
         ref_features = {}
-        ref_features["ref_pos"] = torch.Tensor(ref_pos)
-        ref_features["ref_mask"] = torch.Tensor(self.cropped_atom_array.ref_mask).long()
+        ref_features["ref_pos"] = np.asarray(ref_pos, dtype=np.float32)
+        ref_features["ref_mask"] = np.asarray(self.cropped_atom_array.ref_mask, dtype=np.int64)
         ref_features["ref_element"] = Featurizer.elem_onehot_encoded(
             self.cropped_atom_array.element
-        ).long()
-        ref_features["ref_charge"] = torch.Tensor(
-            self.cropped_atom_array.ref_charge
-        ).long()
+        ).astype(np.int64)
+        ref_features["ref_charge"] = np.asarray(
+            self.cropped_atom_array.ref_charge, dtype=np.int64
+        )
 
         if self.lig_atom_rename:
             atom_names = self.get_renamed_atom_names()
@@ -426,10 +425,10 @@ class Featurizer(object):
 
         ref_features["ref_atom_name_chars"] = Featurizer.ref_atom_name_chars_encoded(
             atom_names
-        ).long()
-        ref_features["ref_space_uid"] = torch.Tensor(
-            self.cropped_atom_array.ref_space_uid
-        ).long()
+        ).astype(np.int64)
+        ref_features["ref_space_uid"] = np.asarray(
+            self.cropped_atom_array.ref_space_uid, dtype=np.int64
+        )
 
         token_array_with_frame = self.get_token_frame(
             token_array=self.cropped_token_array,
@@ -437,22 +436,22 @@ class Featurizer(object):
             ref_pos=ref_features["ref_pos"],
             ref_mask=ref_features["ref_mask"],
         )
-        ref_features["has_frame"] = torch.Tensor(
-            token_array_with_frame.get_annotation("has_frame")
-        ).long()  # [N_token]
-        ref_features["frame_atom_index"] = torch.Tensor(
-            token_array_with_frame.get_annotation("frame_atom_index")
-        ).long()  # [N_token, 3]
+        ref_features["has_frame"] = np.asarray(
+            token_array_with_frame.get_annotation("has_frame"), dtype=np.int64
+        )  # [N_token]
+        ref_features["frame_atom_index"] = np.asarray(
+            token_array_with_frame.get_annotation("frame_atom_index"), dtype=np.int64
+        )  # [N_token, 3]
         return ref_features
 
-    def get_bond_features(self) -> dict[str, torch.Tensor]:
+    def get_bond_features(self) -> dict[str, np.ndarray]:
         """
         Ref: AlphaFold3 SI Chapter 2.8
         A 2D matrix indicating if there is a bond between any atom in token i and token j,
         restricted to just polymer-ligand and ligand-ligand bonds and bonds less than 2.4 Å during training.
         The size of bond feature is [N_token, N_token].
         Returns:
-            Dict[str, torch.Tensor]: A dict of bond features.
+            Dict[str, np.ndarray]: A dict of bond features.
         """
         bond_array = self.cropped_atom_array.bonds.as_array()
         bond_atom_i = bond_array[:, 0]
@@ -492,16 +491,16 @@ class Featurizer(object):
         for i, j in zip(bond_token_i, bond_atom_j):
             token_adj_matrix[i, j] = 1
             token_adj_matrix[j, i] = 1
-        bond_features = {"token_bonds": torch.Tensor(token_adj_matrix)}
+        bond_features = {"token_bonds": np.asarray(token_adj_matrix, dtype=np.float32)}
         return bond_features
 
-    def get_extra_features(self) -> dict[str, torch.Tensor]:
+    def get_extra_features(self) -> dict[str, np.ndarray]:
         """
         Get other features not listed in AlphaFold3 SI Chapter 2.8 Table 5.
         The size of these features is [N_atom].
 
         Returns:
-            Dict[str, torch.Tensor]: a dict of extra features.
+            Dict[str, np.ndarray]: a dict of extra features.
         """
         atom_to_token_idx_dict = {}
         for idx, token in enumerate(self.cropped_token_array.tokens):
@@ -515,31 +514,31 @@ class Featurizer(object):
         ]
 
         extra_features = {}
-        extra_features["atom_to_token_idx"] = torch.Tensor(atom_to_token_idx).long()
-        extra_features["atom_to_tokatom_idx"] = torch.Tensor(
-            self.cropped_atom_array.tokatom_idx
-        ).long()
+        extra_features["atom_to_token_idx"] = np.asarray(atom_to_token_idx, dtype=np.int64)
+        extra_features["atom_to_tokatom_idx"] = np.asarray(
+            self.cropped_atom_array.tokatom_idx, dtype=np.int64
+        )
 
-        extra_features["is_protein"] = torch.Tensor(
-            self.cropped_atom_array.is_protein
-        ).long()
-        extra_features["is_ligand"] = torch.Tensor(
-            self.cropped_atom_array.is_ligand
-        ).long()
-        extra_features["is_dna"] = torch.Tensor(self.cropped_atom_array.is_dna).long()
-        extra_features["is_rna"] = torch.Tensor(self.cropped_atom_array.is_rna).long()
+        extra_features["is_protein"] = np.asarray(
+            self.cropped_atom_array.is_protein, dtype=np.int64
+        )
+        extra_features["is_ligand"] = np.asarray(
+            self.cropped_atom_array.is_ligand, dtype=np.int64
+        )
+        extra_features["is_dna"] = np.asarray(self.cropped_atom_array.is_dna, dtype=np.int64)
+        extra_features["is_rna"] = np.asarray(self.cropped_atom_array.is_rna, dtype=np.int64)
         if "resolution" in self.cropped_atom_array._annot:
-            extra_features["resolution"] = torch.Tensor(
-                [self.cropped_atom_array.resolution[0]]
+            extra_features["resolution"] = np.asarray(
+                [self.cropped_atom_array.resolution[0]], dtype=np.float32
             )
         else:
-            extra_features["resolution"] = torch.Tensor([-1])
+            extra_features["resolution"] = np.asarray([-1], dtype=np.float32)
         return extra_features
 
     @staticmethod
     def get_lig_pocket_mask(
         atom_array: AtomArray, lig_label_asym_id: Union[str, list]
-    ) -> tuple[torch.Tensor, torch.Tensor]:
+    ) -> tuple[np.ndarray, np.ndarray]:
         """
         Ref: AlphaFold3 Chapter Methods.Metrics
 
@@ -555,7 +554,7 @@ class Featurizer(object):
             lig_label_asym_id (Union[str, List]): The label_asym_id of the ligand of interest.
 
         Returns:
-            tuple[torch.Tensor, torch.Tensor]: A tuple of ligand pocket mask and pocket mask.
+            tuple[np.ndarray, np.ndarray]: A tuple of ligand pocket mask and pocket mask.
         """
 
         if isinstance(lig_label_asym_id, str):
@@ -616,38 +615,38 @@ class Featurizer(object):
             ligand_mask_list.append(ligand_mask)
             pocket_mask_list.append(pocket_mask)
 
-        ligand_mask_by_pockets = torch.Tensor(
-            np.array(ligand_mask_list).astype(int)
-        ).long()
-        pocket_mask_by_pockets = torch.Tensor(
-            np.array(pocket_mask_list).astype(int)
-        ).long()
+        ligand_mask_by_pockets = np.asarray(
+            np.array(ligand_mask_list), dtype=np.int64
+        )
+        pocket_mask_by_pockets = np.asarray(
+            np.array(pocket_mask_list), dtype=np.int64
+        )
         return ligand_mask_by_pockets, pocket_mask_by_pockets
 
-    def get_mask_features(self) -> dict[str, torch.Tensor]:
+    def get_mask_features(self) -> dict[str, np.ndarray]:
         """
         Generate mask features for the cropped atom array.
 
         Returns:
-            Dict[str, torch.Tensor]: A dictionary containing various mask features.
+            Dict[str, np.ndarray]: A dictionary containing various mask features.
         """
         mask_features = {}
 
-        mask_features["pae_rep_atom_mask"] = torch.Tensor(
-            self.cropped_atom_array.centre_atom_mask
-        ).long()
+        mask_features["pae_rep_atom_mask"] = np.asarray(
+            self.cropped_atom_array.centre_atom_mask, dtype=np.int64
+        )
 
-        mask_features["plddt_m_rep_atom_mask"] = torch.Tensor(
-            self.cropped_atom_array.plddt_m_rep_atom_mask
-        ).long()  # [N_atom]
+        mask_features["plddt_m_rep_atom_mask"] = np.asarray(
+            self.cropped_atom_array.plddt_m_rep_atom_mask, dtype=np.int64
+        )  # [N_atom]
 
-        mask_features["distogram_rep_atom_mask"] = torch.Tensor(
-            self.cropped_atom_array.distogram_rep_atom_mask
-        ).long()  # [N_atom]
+        mask_features["distogram_rep_atom_mask"] = np.asarray(
+            self.cropped_atom_array.distogram_rep_atom_mask, dtype=np.int64
+        )  # [N_atom]
 
-        mask_features["modified_res_mask"] = torch.Tensor(
-            self.cropped_atom_array.modified_res_mask
-        ).long()
+        mask_features["modified_res_mask"] = np.asarray(
+            self.cropped_atom_array.modified_res_mask, dtype=np.int64
+        )
 
         lig_polymer_bonds = get_ligand_polymer_bond_mask(self.cropped_atom_array)
         num_atoms = len(self.cropped_atom_array)
@@ -655,9 +654,9 @@ class Featurizer(object):
         for i, j, _ in lig_polymer_bonds:
             bond_mask_mat[i, j] = 1
             bond_mask_mat[j, i] = 1
-        mask_features["bond_mask"] = torch.Tensor(
-            bond_mask_mat
-        ).long()  # [N_atom, N_atom]
+        mask_features["bond_mask"] = np.asarray(
+            bond_mask_mat, dtype=np.int64
+        )  # [N_atom, N_atom]
         return mask_features
 
     def get_all_input_features(self):
@@ -665,7 +664,7 @@ class Featurizer(object):
         Get input features from cropped data.
 
         Returns:
-            Dict[str, torch.Tensor]: a dict of features.
+            Dict[str, np.ndarray]: a dict of features.
         """
         features = {}
         token_features = self.get_token_features()
@@ -687,23 +686,23 @@ class Featurizer(object):
         features.update(mask_features)
         return features
 
-    def get_labels(self) -> dict[str, torch.Tensor]:
+    def get_labels(self) -> dict[str, np.ndarray]:
         """
         Get the input labels required for the training phase.
 
         Returns:
-            Dict[str, torch.Tensor]: a dict of labels.
+            Dict[str, np.ndarray]: a dict of labels.
         """
 
         labels = {}
 
-        labels["coordinate"] = torch.Tensor(
-            self.cropped_atom_array.coord
+        labels["coordinate"] = np.asarray(
+            self.cropped_atom_array.coord, dtype=np.float32
         )  # [N_atom, 3]
 
-        labels["coordinate_mask"] = torch.Tensor(
-            self.cropped_atom_array.is_resolved.astype(int)
-        ).long()  # [N_atom]
+        labels["coordinate_mask"] = np.asarray(
+            self.cropped_atom_array.is_resolved, dtype=np.int64
+        )  # [N_atom]
         return labels
 
     def get_atom_permutation_list(
@@ -777,7 +776,7 @@ class Featurizer(object):
         atom_array: AtomArray,
         cropped_atom_array: AtomArray = None,
         get_cropped_asym_only: bool = True,
-    ) -> dict[str, torch.Tensor]:
+    ) -> dict[str, np.ndarray]:
         """Get full ground truth complex features.
         It is used for multi-chain permutation alignment.
 
@@ -791,7 +790,7 @@ class Featurizer(object):
                 the cropped_atom_array.
 
         Returns:
-            Dict[str, torch.Tensor]: a dictionary containing
+            Dict[str, np.ndarray]: a dictionary containing
                 coordinate, coordinate_mask, etc.
         """
         gt_features = {}
@@ -817,12 +816,12 @@ class Featurizer(object):
                 mask = mask * np.isin(atom_array.mol_id, asyms)
             atom_array = atom_array[mask]
 
-        gt_features["coordinate"] = torch.Tensor(atom_array.coord)
-        gt_features["coordinate_mask"] = torch.Tensor(atom_array.is_resolved).long()
-        gt_features["entity_mol_id"] = torch.Tensor(atom_array.entity_mol_id).long()
-        gt_features["mol_id"] = torch.Tensor(atom_array.mol_id).long()
-        gt_features["mol_atom_index"] = torch.Tensor(atom_array.mol_atom_index).long()
-        gt_features["pae_rep_atom_mask"] = torch.Tensor(
-            atom_array.centre_atom_mask
-        ).long()
+        gt_features["coordinate"] = np.asarray(atom_array.coord, dtype=np.float32)
+        gt_features["coordinate_mask"] = np.asarray(atom_array.is_resolved, dtype=np.int64)
+        gt_features["entity_mol_id"] = np.asarray(atom_array.entity_mol_id, dtype=np.int64)
+        gt_features["mol_id"] = np.asarray(atom_array.mol_id, dtype=np.int64)
+        gt_features["mol_atom_index"] = np.asarray(atom_array.mol_atom_index, dtype=np.int64)
+        gt_features["pae_rep_atom_mask"] = np.asarray(
+            atom_array.centre_atom_mask, dtype=np.int64
+        )
         return gt_features, atom_array
