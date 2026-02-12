@@ -26,16 +26,17 @@ Pre-converted Equinox models skip the PyTorch dependency entirely and load in un
 | `protenix_base_default_v1.0.0` | 368M | 1474 MB |
 | `protenix_base_20250630_v1.0.0` | 368M | 1474 MB |
 
-### Saving and loading
+### Loading
+
+Models are hosted on [HuggingFace](https://huggingface.co/nickrb/protenij) and downloaded automatically on first use.
 
 ```python
-from protenix.backend import save_model, load_model
+from protenix.backend import load_model
 
-# Save (after converting from PyTorch)
-save_model(jax_model, "~/.protenix/protenix_base_default_v1.0.0")
-# produces .eqx (array data) + .skeleton.pkl (pytree structure)
+# Downloads from HuggingFace, caches to ~/.protenix/
+model = load_model("protenix_base_default_v1.0.0")
 
-# Load (no PyTorch needed)
+# Or load from an explicit path
 model = load_model("~/.protenix/protenix_base_default_v1.0.0")
 ```
 

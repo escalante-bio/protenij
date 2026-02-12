@@ -131,9 +131,53 @@ def save_model(model, path):
         pickle.dump(skeleton, f, protocol=pickle.HIGHEST_PROTOCOL)
 
 
-def load_model(path):
-    """Load an Equinox model from .eqx + .skeleton.pkl files (no PyTorch needed)."""
+HF_REPO = "nickrb/protenij"
+
+KNOWN_MODELS = [
+    "protenix_tiny_default_v0.5.0",
+    "protenix_mini_default_v0.5.0",
+    "protenix_base_default_v1.0.0",
+    "protenix_base_20250630_v1.0.0",
+]
+
+
+def _resolve_model_path(name_or_path: str) -> str:
+    """Resolve a model name to a local path, downloading from HF if needed."""
+    import os
+
+    path = os.path.expanduser(name_or_path)
+    if os.path.exists(f"{path}.eqx"):
+        return path
+
+    # Check ~/.protenix/ cache
+    cache_path = os.path.expanduser(f"~/.protenix/{name_or_path}")
+    if os.path.exists(f"{cache_path}.eqx"):
+        return cache_path
+
+    # Download from HuggingFace
+    from huggingface_hub import hf_hub_download
+
+    os.makedirs(os.path.expanduser("~/.protenix"), exist_ok=True)
+    for suffix in [".eqx", ".skeleton.pkl"]:
+        hf_hub_download(
+            HF_REPO,
+            f"{name_or_path}{suffix}",
+            local_dir=os.path.expanduser("~/.protenix"),
+        )
+    return cache_path
+
+
+def load_model(name_or_path: str):
+    """Load an Equinox model (no PyTorch needed).
+
+    Args:
+        name_or_path: Either a full path (e.g. '~/.protenix/protenix_base_default_v1.0.0')
+            or a model name (e.g. 'protenix_base_default_v1.0.0') which will be
+            resolved from ~/.protenix/ or downloaded from HuggingFace.
+    """
     import protenix.protenij  # ensure pytree node types are registered
+
+    path = _resolve_model_path(name_or_path)
     with open(f"{path}.skeleton.pkl", "rb") as f:
         skeleton = pickle.load(f)
     return eqx.tree_deserialise_leaves(f"{path}.eqx", skeleton)
