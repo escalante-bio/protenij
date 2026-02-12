@@ -2,6 +2,7 @@
 
 from dataclasses import fields
 from functools import singledispatch
+import pickle
 
 import time
 import einops
@@ -222,6 +223,26 @@ class SparseEmbedding(eqx.Module):
     @staticmethod
     def from_torch(m: torch.nn.modules.sparse.Embedding):
         return SparseEmbedding(embedding=eqx.nn.Embedding(weight=from_torch(m.weight)))
+
+
+def save_model(model, path):
+    """Save an Equinox model to disk as .eqx (arrays) + .skeleton.pkl (structure)."""
+    eqx.tree_serialise_leaves(f"{path}.eqx", model)
+    skeleton = jax.tree.map(
+        lambda x: jax.ShapeDtypeStruct(x.shape, x.dtype) if eqx.is_array(x) else x,
+        model,
+        is_leaf=eqx.is_array,
+    )
+    with open(f"{path}.skeleton.pkl", "wb") as f:
+        pickle.dump(skeleton, f, protocol=pickle.HIGHEST_PROTOCOL)
+
+
+def load_model(path):
+    """Load an Equinox model from .eqx + .skeleton.pkl files (no PyTorch needed)."""
+    import protenix.protenij  # ensure pytree node types are registered
+    with open(f"{path}.skeleton.pkl", "rb") as f:
+        skeleton = pickle.load(f)
+    return eqx.tree_deserialise_leaves(f"{path}.eqx", skeleton)
 
 
 # Useful for testing
