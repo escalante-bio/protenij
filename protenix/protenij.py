@@ -1,5 +1,4 @@
 import protenix.backend as backend
-import protenix
 from jaxtyping import Bool, Float, Array, Int
 import jax
 import jax.numpy as jnp
@@ -10,28 +9,29 @@ import math
 
 import einops
 from .backend import (
-    from_torch,
-    AbstractFromTorch,
-    register_from_torch,
+    _HAS_TORCH,
     Linear,
     LayerNorm,
+    AbstractFromTorch,
 )
 
-import protenix
-import protenix.model
-import protenix.model.modules
-import protenix.model.modules.primitives
-import protenix.model.triangular
-import protenix.model.triangular.layers
-import protenix.model.triangular.triangular
-import protenix.model.modules.transformer
-import protenix.model.modules.pairformer
-import protenix.model.modules.embedders
-import protenix.model.modules.head
-import protenix.model.modules.diffusion
-import protenix.model.generator
-import protenix.model.modules.confidence
-import protenix.model.protenix
+if _HAS_TORCH:
+    from .backend import from_torch, register_from_torch
+    import protenix.model
+    import protenix.model.modules
+    import protenix.model.modules.primitives
+    import protenix.model.triangular
+    import protenix.model.triangular.layers
+    import protenix.model.triangular.triangular
+    import protenix.model.modules.transformer
+    import protenix.model.modules.pairformer
+    import protenix.model.modules.embedders
+    import protenix.model.modules.head
+    import protenix.model.modules.diffusion
+    import protenix.model.generator
+    import protenix.model.modules.confidence
+    import protenix.model.protenix
+    import protenix.openfold_local.model.primitives
 
 def move_final_dim_to_dim(x, dim: int):
     # permute_final_dims
@@ -231,12 +231,6 @@ def rearrange_qk_to_dense_trunk(
     return q_trunked, k_trunked, padding_info
 
 
-register_from_torch(protenix.model.triangular.layers.OpenFoldLayerNorm)(
-    backend.LayerNorm
-)
-
-
-@register_from_torch(protenix.model.modules.primitives.Transition)
 class Transition(AbstractFromTorch):
     layernorm1: backend.LayerNorm
     linear_no_bias_a: backend.Linear
@@ -250,7 +244,6 @@ class Transition(AbstractFromTorch):
         return self.linear_no_bias(jax.nn.silu(a) * b)
 
 
-@register_from_torch(protenix.model.triangular.layers.Dropout)
 class Dropout(eqx.Module):
     rate: float
     batch_dim: list[int]
@@ -275,13 +268,10 @@ class Dropout(eqx.Module):
         return x * bools * (1 / (1 - self.rate))
 
     @staticmethod
-    def from_torch(d: protenix.model.triangular.layers.Dropout):
+    def from_torch(d: "protenix.model.triangular.layers.Dropout"):
         return Dropout(d.r, d.batch_dim)
 
 
-@register_from_torch(
-    protenix.model.triangular.triangular.TriangleMultiplicativeUpdate
-)
 class TriangleMultiplication(AbstractFromTorch):
     linear_a_p: backend.Linear
     linear_a_g: backend.Linear
@@ -328,7 +318,6 @@ class TriangleMultiplication(AbstractFromTorch):
         return x * g
 
 
-@register_from_torch(protenix.model.triangular.layers.Attention)
 class Attention(AbstractFromTorch):
     c_q: int  # input dimension of query
     c_k: int  # input dimension of key
@@ -392,9 +381,6 @@ class Attention(AbstractFromTorch):
         return self.linear_o(o)
 
 
-@register_from_torch(
-    protenix.model.triangular.triangular.TriangleAttention
-)
 class TriangleAttention(AbstractFromTorch):
     starting: bool
     layer_norm: backend.LayerNorm
@@ -451,7 +437,6 @@ def _attention(
     return jnp.swapaxes(out, -3, -2)
 
 
-@register_from_torch(protenix.model.modules.primitives.Attention)
 class ProtenixAttention(AbstractFromTorch):
     c_q: int  # input dimension of query
     c_k: int  # input dimension of key
@@ -704,7 +689,6 @@ class ProtenixAttention(AbstractFromTorch):
         return self._wrap_up(o, q_x)
 
 
-@register_from_torch(protenix.model.modules.primitives.AdaptiveLayerNorm)
 class AdaptiveLayerNorm(AbstractFromTorch):
     layernorm_a: backend.LayerNorm
     layernorm_s: backend.LayerNorm
@@ -718,7 +702,6 @@ class AdaptiveLayerNorm(AbstractFromTorch):
         return a
 
 
-@register_from_torch(protenix.model.modules.transformer.AttentionPairBias)
 class AttentionPairBias(AbstractFromTorch):
     layernorm_a: AdaptiveLayerNorm | LayerNorm
     layernorm_kv: AdaptiveLayerNorm | LayerNorm | None
@@ -807,7 +790,6 @@ class AttentionPairBias(AbstractFromTorch):
         return a
 
 
-@register_from_torch(protenix.model.modules.pairformer.PairformerBlock)
 class PairformerBlock(AbstractFromTorch):
     tri_mul_out: TriangleMultiplication
     tri_mul_in: TriangleMultiplication
@@ -851,13 +833,12 @@ class PairformerBlock(AbstractFromTorch):
         return s, z
 
 
-@register_from_torch(protenix.model.modules.pairformer.PairformerStack)
 class Pairformer(eqx.Module):
     stacked_parameters: PairformerBlock
     static: PairformerBlock
 
     @staticmethod
-    def from_torch(m: protenix.model.modules.pairformer.PairformerStack):
+    def from_torch(m: "protenix.model.modules.pairformer.PairformerStack"):
         layers = [from_torch(layer) for layer in m.blocks]
         if len(layers) == 0:
             return Pairformer(None, None)
@@ -882,7 +863,6 @@ class Pairformer(eqx.Module):
         return jax.lax.scan(body_fn, (s, z, key), self.stacked_parameters)[0][:2]
 
 
-@register_from_torch(protenix.model.triangular.layers.OuterProductMean)
 class OuterProductMean(AbstractFromTorch):
     layer_norm: LayerNorm
     linear_1: Linear
@@ -923,7 +903,6 @@ class OuterProductMean(AbstractFromTorch):
         return outer / norm
 
 
-@register_from_torch(protenix.model.modules.pairformer.MSAPairWeightedAveraging)
 class MSAPairWeightedAveraging(AbstractFromTorch):
     c_m: int
     c: int
@@ -950,7 +929,6 @@ class MSAPairWeightedAveraging(AbstractFromTorch):
         return m
 
 
-@register_from_torch(protenix.model.modules.pairformer.MSAStack)
 class MSAStack(AbstractFromTorch):
     c: int
     msa_pair_weighted_averaging: MSAPairWeightedAveraging
@@ -963,16 +941,15 @@ class MSAStack(AbstractFromTorch):
         return m
 
 
-@register_from_torch(protenix.model.modules.pairformer.MSABlock)
 class MSABlock(eqx.Module):
     c_m: int
     c_z: int
     outer_product_mean_msa: OuterProductMean
-    msa_stack: MSAStack | None
+    msa_stack: MSAStack
     pair_stack: PairformerBlock
 
     @staticmethod
-    def from_torch(m: protenix.model.modules.pairformer.MSABlock):
+    def from_torch(m: "protenix.model.modules.pairformer.MSABlock"):
         msa_stack = from_torch(m.msa_stack) if hasattr(m, "msa_stack") else None
         return MSABlock(
             c_m=m.c_m,
@@ -984,8 +961,7 @@ class MSABlock(eqx.Module):
 
     def __call__(self, m, z, pair_mask, *, key):
         z = z + self.outer_product_mean_msa(m)
-        if self.msa_stack is not None:
-            m = self.msa_stack(m, z, key=key)
+        m = self.msa_stack(m, z, key=key)
         _, z = self.pair_stack(s=None, z=z, pair_mask=pair_mask, key=key)
         return m, z
 
@@ -1014,14 +990,11 @@ def sample_msa_feature_dict_random_without_replacement(
     return jax.tree.map(lambda v: jnp.take(v, indices=indices, axis=-2), feat_dict)
 
 
-@register_from_torch(protenix.model.modules.pairformer.MSAModule)
 class MSAModule(eqx.Module):
     linear_no_bias_m: Linear
     linear_no_bias_s: Linear
-    # MSABlocks have heterogeneous tree structure (some have msa_stack, some don't)
-    # so we store them as a list rather than trying to stack for scan.
-    # With only 1-4 blocks, the JIT overhead is minimal.
-    blocks: list[MSABlock]
+    stacked_block_params: MSABlock
+    block_static: MSABlock
     msa_configs: dict
     training: bool
     input_feature: dict
@@ -1059,21 +1032,64 @@ class MSAModule(eqx.Module):
         msa_sample = self.linear_no_bias_m(msa_sample)
         msa_sample = msa_sample + self.linear_no_bias_s(s_inputs)
 
-        for block in self.blocks:
+        @jax.checkpoint
+        def body_fn(carry, params):
+            m, z, key = carry
             key = jax.random.fold_in(key, 1)
-            msa_sample, z = block(msa_sample, z, pair_mask, key=key)
+            block = eqx.combine(self.block_static, params)
+            m, z = block(m, z, pair_mask, key=key)
+            return (m, z, key), None
+
+        (_, z, _), _ = jax.lax.scan(
+            body_fn, (msa_sample, z, key), self.stacked_block_params
+        )
 
         return z
 
     @staticmethod
+    def _make_blocks_homogeneous(blocks: list[MSABlock]) -> list[MSABlock]:
+        """Ensure all blocks have an MSAStack so they can be scanned.
+
+        Blocks without an msa_stack (typically the last block) get a
+        zero-weight copy of the first block's msa_stack, which acts as
+        an identity (all linear outputs are zero).
+        """
+        template = None
+        for b in blocks:
+            if b.msa_stack is not None:
+                template = b.msa_stack
+                break
+        if template is None:
+            return blocks
+        dummy = jax.tree.map(
+            lambda x: jnp.zeros_like(x) if eqx.is_array(x) else x,
+            template,
+        )
+        return [
+            eqx.tree_at(
+                lambda b: b.msa_stack, b, dummy, is_leaf=lambda x: x is None
+            )
+            if b.msa_stack is None
+            else b
+            for b in blocks
+        ]
+
+    @staticmethod
     def from_torch(
-        m: protenix.model.modules.pairformer.MSAModule,
+        m: "protenix.model.modules.pairformer.MSAModule",
     ):
         blocks = [from_torch(block) for block in m.blocks]
+        blocks = MSAModule._make_blocks_homogeneous(blocks)
+        _, block_static = eqx.partition(blocks[0], eqx.is_inexact_array)
+        stacked_block_params = jax.tree.map(
+            lambda *v: jnp.stack(v, 0),
+            *[eqx.filter(b, eqx.is_inexact_array) for b in blocks],
+        )
         return MSAModule(
             linear_no_bias_m=from_torch(m.linear_no_bias_m),
             linear_no_bias_s=from_torch(m.linear_no_bias_s),
-            blocks=blocks,
+            stacked_block_params=stacked_block_params,
+            block_static=block_static,
             msa_configs=m.msa_configs,
             training=m.training,
             input_feature=from_torch(m.input_feature),
@@ -1081,7 +1097,6 @@ class MSAModule(eqx.Module):
         )
 
 
-@register_from_torch(protenix.model.modules.transformer.ConditionedTransitionBlock)
 class ConditionedTransitionBlock(AbstractFromTorch):
     adaln: AdaptiveLayerNorm
     linear_nobias_a1: Linear
@@ -1098,7 +1113,6 @@ class ConditionedTransitionBlock(AbstractFromTorch):
         return a
 
 
-@register_from_torch(protenix.model.modules.transformer.DiffusionTransformerBlock)
 class DiffusionTransformerBlock(AbstractFromTorch):
     n_heads: int
     c_a: int
@@ -1135,13 +1149,12 @@ class DiffusionTransformerBlock(AbstractFromTorch):
         return out_a, s, z
 
 
-@register_from_torch(protenix.model.modules.transformer.DiffusionTransformer)
 class DiffusionTransformer(eqx.Module):
     block_params: DiffusionTransformerBlock
     block_static: DiffusionTransformerBlock
 
     @staticmethod
-    def from_torch(m: protenix.model.modules.transformer.DiffusionTransformer):
+    def from_torch(m: "protenix.model.modules.transformer.DiffusionTransformer"):
         layers = [from_torch(layer) for layer in m.blocks]
         _, static = eqx.partition(layers[0], eqx.is_inexact_array)
         return DiffusionTransformer(
@@ -1171,7 +1184,6 @@ class DiffusionTransformer(eqx.Module):
         return jax.lax.scan(body_fn, (a, s, z), self.block_params)[0][0]
 
 
-@register_from_torch(protenix.model.modules.transformer.AtomTransformer)
 class AtomTransformer(AbstractFromTorch):
     diffusion_transformer: DiffusionTransformer
     n_queries: int
@@ -1296,7 +1308,6 @@ def broadcast_token_to_local_atom_pair(
     return z_gathered_blocked, pad_info
 
 
-@register_from_torch(protenix.model.modules.transformer.AtomAttentionEncoder)
 class AtomAttentionEncoder(eqx.Module):
     has_coords: bool
     c_atom: int
@@ -1463,7 +1474,7 @@ class AtomAttentionEncoder(eqx.Module):
         return a, q_l, c_l, p_lm
 
     @staticmethod
-    def from_torch(m: protenix.model.modules.transformer.AtomAttentionEncoder):
+    def from_torch(m: "protenix.model.modules.transformer.AtomAttentionEncoder"):
         return AtomAttentionEncoder(
             has_coords=m.has_coords,
             c_atom=m.c_atom,
@@ -1504,7 +1515,6 @@ class AtomAttentionEncoder(eqx.Module):
         )
 
 
-@register_from_torch(protenix.model.modules.embedders.InputFeatureEmbedder)
 class InputFeatureEmbedder(eqx.Module):
     c_atom: int
     c_atompair: int
@@ -1532,7 +1542,7 @@ class InputFeatureEmbedder(eqx.Module):
 
     @staticmethod
     def from_torch(
-        m: protenix.model.modules.embedders.InputFeatureEmbedder,
+        m: "protenix.model.modules.embedders.InputFeatureEmbedder",
     ):
         return InputFeatureEmbedder(
             c_atom=m.c_atom,
@@ -1544,7 +1554,6 @@ class InputFeatureEmbedder(eqx.Module):
         )
 
 
-@register_from_torch(protenix.model.modules.embedders.RelativePositionEncoding)
 class RelativePositionEncoding(AbstractFromTorch):
     r_max: int
     s_max: int
@@ -1605,7 +1614,6 @@ class RelativePositionEncoding(AbstractFromTorch):
         return p
 
 
-@register_from_torch(protenix.model.modules.head.DistogramHead)
 class DistogramHead(AbstractFromTorch):
     linear: Linear
 
@@ -1615,7 +1623,6 @@ class DistogramHead(AbstractFromTorch):
         return logits
 
 
-@register_from_torch(protenix.model.modules.embedders.FourierEmbedding)
 class FourierEmbedding(AbstractFromTorch):
     w: Float[Array, "..."]
     b: Float[Array, "..."]
@@ -1624,7 +1631,6 @@ class FourierEmbedding(AbstractFromTorch):
         return jnp.cos(2 * jnp.pi * (self.w * t_hat_noise_level[..., None] + self.b))
 
 
-@register_from_torch(protenix.model.modules.diffusion.DiffusionConditioning)
 class DiffusionConditioning(AbstractFromTorch):
     sigma_data: float
     c_z: int
@@ -1700,7 +1706,6 @@ def broadcast_token_to_atom(
     return out
 
 
-@register_from_torch(protenix.model.modules.transformer.AtomAttentionDecoder)
 class AtomAttentionDecoder(AbstractFromTorch):
     n_blocks: int
     n_heads: int
@@ -1738,7 +1743,6 @@ class AtomAttentionDecoder(AbstractFromTorch):
         return self.linear_no_bias_out(self.layernorm_q(q))
 
 
-@register_from_torch(protenix.model.modules.diffusion.DiffusionModule)
 class DiffusionModel(AbstractFromTorch):
     sigma_data: float
     c_atom: int
@@ -1857,7 +1861,6 @@ class DiffusionModel(AbstractFromTorch):
         return x_denoised
 
 
-@register_from_torch(protenix.model.generator.InferenceNoiseScheduler)
 class InferenceNoiseScheduler(eqx.Module):
     sigma_data: float
     s_max: float
@@ -1883,7 +1886,7 @@ class InferenceNoiseScheduler(eqx.Module):
         return t_step_list
 
     @staticmethod
-    def from_torch(m: protenix.model.generator.InferenceNoiseScheduler):
+    def from_torch(m: "protenix.model.generator.InferenceNoiseScheduler"):
         return InferenceNoiseScheduler(
             sigma_data=m.sigma_data,
             s_max=m.s_max,
@@ -1971,7 +1974,6 @@ def sample_diffusion(
     return x_l
 
 
-@register_from_torch(protenix.model.modules.pairformer.TemplateEmbedder)
 class TemplateEmbedder(AbstractFromTorch):
     n_blocks: int
     c: int
@@ -2055,7 +2057,6 @@ class TemplateEmbedder(AbstractFromTorch):
         return u
 
 
-@register_from_torch(protenix.model.modules.confidence.ConfidenceHead)
 class ConfidenceHead(AbstractFromTorch):
     b_pae: int
     b_pde: int
@@ -2168,7 +2169,6 @@ class Outputs(eqx.Module):
     confidence_metrics: ConfidenceMetrics
     distogram_logits: Float[Array, "... N_sample N_token N_token 64"]
 
-@register_from_torch(protenix.model.protenix.Protenix)
 class Protenix(eqx.Module):
     input_embedder: InputFeatureEmbedder
     relative_position_encoding: RelativePositionEncoding
@@ -2194,7 +2194,7 @@ class Protenix(eqx.Module):
     confidence_head: ConfidenceHead
 
     @staticmethod
-    def from_torch(m: protenix.model.protenix.Protenix):
+    def from_torch(m: "protenix.model.protenix.Protenix"):
         return Protenix(
             input_embedder=from_torch(m.input_embedder),
             relative_position_encoding=from_torch(m.relative_position_encoding),
@@ -2347,4 +2347,62 @@ class Protenix(eqx.Module):
             confidence_metrics=confidence_metrics,
             distogram_logits=self.distogram_head(trunk_embedding.z),
         )
-        
+
+
+# ── Conditional from_torch registrations (only when torch is available) ──────
+
+if _HAS_TORCH:
+    # primitives
+    from_torch.register(protenix.model.modules.primitives.Transition, Transition.from_torch)
+    from_torch.register(protenix.model.modules.primitives.Attention, ProtenixAttention.from_torch)
+    from_torch.register(protenix.model.modules.primitives.AdaptiveLayerNorm, AdaptiveLayerNorm.from_torch)
+    from_torch.register(protenix.model.modules.transformer.AttentionPairBias, AttentionPairBias.from_torch)
+
+    # openfold
+    from_torch.register(protenix.openfold_local.model.primitives.OpenFoldLayerNorm,
+                        lambda m: backend.LayerNorm(weight=from_torch(m.weight), bias=from_torch(m.bias), eps=m.eps))
+
+    # triangular
+    from_torch.register(protenix.model.triangular.layers.Dropout, Dropout.from_torch)
+    from_torch.register(protenix.model.triangular.layers.Attention, Attention.from_torch)
+    from_torch.register(protenix.model.triangular.layers.OuterProductMean, OuterProductMean.from_torch)
+    from_torch.register(protenix.model.triangular.triangular.TriangleMultiplicativeUpdate, TriangleMultiplication.from_torch)
+    from_torch.register(protenix.model.triangular.triangular.TriangleAttention, TriangleAttention.from_torch)
+
+    # pairformer
+    from_torch.register(protenix.model.modules.pairformer.PairformerBlock, PairformerBlock.from_torch)
+    from_torch.register(protenix.model.modules.pairformer.PairformerStack, Pairformer.from_torch)
+    from_torch.register(protenix.model.modules.pairformer.MSAPairWeightedAveraging, MSAPairWeightedAveraging.from_torch)
+    from_torch.register(protenix.model.modules.pairformer.MSAStack, MSAStack.from_torch)
+    from_torch.register(protenix.model.modules.pairformer.MSABlock, MSABlock.from_torch)
+    from_torch.register(protenix.model.modules.pairformer.MSAModule, MSAModule.from_torch)
+    from_torch.register(protenix.model.modules.pairformer.TemplateEmbedder, TemplateEmbedder.from_torch)
+
+    # diffusion
+    from_torch.register(protenix.model.modules.diffusion.FourierEmbedding, FourierEmbedding.from_torch)
+    from_torch.register(protenix.model.modules.diffusion.DiffusionConditioning, DiffusionConditioning.from_torch)
+    from_torch.register(protenix.model.modules.transformer.ConditionedTransitionBlock, ConditionedTransitionBlock.from_torch)
+    from_torch.register(protenix.model.modules.transformer.DiffusionTransformerBlock, DiffusionTransformerBlock.from_torch)
+    from_torch.register(protenix.model.modules.diffusion.DiffusionModule, DiffusionModel.from_torch)
+
+    # transformer
+    from_torch.register(protenix.model.modules.transformer.DiffusionTransformer, DiffusionTransformer.from_torch)
+    from_torch.register(protenix.model.modules.transformer.AtomTransformer, AtomTransformer.from_torch)
+    from_torch.register(protenix.model.modules.transformer.AtomAttentionEncoder, AtomAttentionEncoder.from_torch)
+    from_torch.register(protenix.model.modules.transformer.AtomAttentionDecoder, AtomAttentionDecoder.from_torch)
+
+    # embedders
+    from_torch.register(protenix.model.modules.embedders.InputFeatureEmbedder, InputFeatureEmbedder.from_torch)
+    from_torch.register(protenix.model.modules.embedders.RelativePositionEncoding, RelativePositionEncoding.from_torch)
+
+    # head
+    from_torch.register(protenix.model.modules.head.DistogramHead, DistogramHead.from_torch)
+
+    # confidence
+    from_torch.register(protenix.model.modules.confidence.ConfidenceHead, ConfidenceHead.from_torch)
+
+    # generator
+    from_torch.register(protenix.model.generator.InferenceNoiseScheduler, InferenceNoiseScheduler.from_torch)
+
+    # top-level model
+    from_torch.register(protenix.model.protenix.Protenix, Protenix.from_torch)
