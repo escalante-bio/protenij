@@ -2,6 +2,7 @@
 
 from dataclasses import fields
 from functools import singledispatch
+import os
 import pickle
 
 import time
@@ -140,30 +141,43 @@ KNOWN_MODELS = [
     "protenix_base_20250630_v1.0.0",
 ]
 
+DATA_FILES = [
+    "components.v20240608.cif",
+    "components.v20240608.cif.rdkit_mol.pkl",
+    "clusters-by-entity-40.txt",
+]
+
+_CACHE_DIR = os.path.expanduser("~/.protenix")
+
+
+def _hf_download(filename: str) -> None:
+    from huggingface_hub import hf_hub_download
+
+    os.makedirs(_CACHE_DIR, exist_ok=True)
+    hf_hub_download(HF_REPO, filename, local_dir=_CACHE_DIR)
+
+
+def download_data() -> None:
+    """Download CCD and PDB cluster data files from HuggingFace if missing."""
+    for name in DATA_FILES:
+        if not os.path.exists(os.path.join(_CACHE_DIR, name)):
+            _hf_download(name)
+
 
 def _resolve_model_path(name_or_path: str) -> str:
     """Resolve a model name to a local path, downloading from HF if needed."""
-    import os
-
     path = os.path.expanduser(name_or_path)
     if os.path.exists(f"{path}.eqx"):
         return path
 
     # Check ~/.protenix/ cache
-    cache_path = os.path.expanduser(f"~/.protenix/{name_or_path}")
+    cache_path = os.path.join(_CACHE_DIR, name_or_path)
     if os.path.exists(f"{cache_path}.eqx"):
         return cache_path
 
     # Download from HuggingFace
-    from huggingface_hub import hf_hub_download
-
-    os.makedirs(os.path.expanduser("~/.protenix"), exist_ok=True)
     for suffix in [".eqx", ".skeleton.pkl"]:
-        hf_hub_download(
-            HF_REPO,
-            f"{name_or_path}{suffix}",
-            local_dir=os.path.expanduser("~/.protenix"),
-        )
+        _hf_download(f"{name_or_path}{suffix}")
     return cache_path
 
 
@@ -177,6 +191,7 @@ def load_model(name_or_path: str):
     """
     import protenix.protenij  # ensure pytree node types are registered
 
+    download_data()
     path = _resolve_model_path(name_or_path)
     with open(f"{path}.skeleton.pkl", "rb") as f:
         skeleton = pickle.load(f)
