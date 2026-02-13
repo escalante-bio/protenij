@@ -24,7 +24,12 @@ from typing import Dict, Optional, Sequence
 
 import gemmi
 import numpy as np
-import torch
+
+try:
+    import torch
+    _HAS_TORCH = True
+except ImportError:
+    _HAS_TORCH = False
 
 import protenix.openfold_local.np.residue_constants as rc
 
@@ -111,8 +116,10 @@ class Templates:
             "template_backbone_frame_mask": np.stack(bb_masks),
         }
 
-    def as_torch_dict(self) -> Dict[str, torch.Tensor]:
+    def as_torch_dict(self) -> "Dict[str, torch.Tensor]":
         """Convert features to torch tensors."""
+        if not _HAS_TORCH:
+            raise ImportError("torch is required for as_torch_dict(); use as_protenix_dict() instead")
         np_dict = self.as_protenix_dict()
         return {k: torch.from_numpy(v) for k, v in np_dict.items()}
 
@@ -518,7 +525,6 @@ def featurize(
     """
     import tempfile
     from collections import defaultdict
-    import torch
     from protenix.data.json_to_feature import SampleDictToFeatures
     from protenix.data.msa_featurizer import InferenceMSAFeaturizer
     from protenix.data.utils import data_type_transform
@@ -565,9 +571,9 @@ def featurize(
 
     sample2feat = SampleDictToFeatures(sample)
     features_dict, atom_array, token_array = sample2feat.get_feature_dict()
-    features_dict["distogram_rep_atom_mask"] = torch.Tensor(
-        atom_array.distogram_rep_atom_mask
-    ).long()
+    features_dict["distogram_rep_atom_mask"] = np.asarray(
+        atom_array.distogram_rep_atom_mask, dtype=np.int64
+    )
 
     # --- MSA featurization ---
 
@@ -588,7 +594,7 @@ def featurize(
     )
     if msa_feats:
         for k, v in msa_feats.items():
-            features_dict[k] = torch.from_numpy(v) if isinstance(v, np.ndarray) else v
+            features_dict[k] = np.asarray(v) if isinstance(v, np.ndarray) else v
 
     # Apply data type transforms (still uses torch internally)
     features_dict = data_type_transform(features_dict)
@@ -596,21 +602,18 @@ def featurize(
     # --- Template features ---
 
     templates = build_templates_from_chains(chains)
-    features_dict.update(templates.as_torch_dict())
+    features_dict.update(templates.as_protenix_dict())
 
     # --- Convert to numpy ---
 
-    def to_numpy(v):
-        if isinstance(v, torch.Tensor):
-            return v.numpy()
+    result = {}
+    for k, v in features_dict.items():
+        if isinstance(v, np.ndarray):
+            result[k] = v
         elif isinstance(v, dict):
-            return {k2: to_numpy(v2) for k2, v2 in v.items()}
-        elif isinstance(v, np.ndarray):
-            return v
+            result[k] = {k2: np.asarray(v2) if not isinstance(v2, np.ndarray) else v2 for k2, v2 in v.items()}
         else:
-            return v
-
-    result = {k: to_numpy(v) for k, v in features_dict.items()}
+            result[k] = v
 
     # Add atom_rep_atom_idx (needed by JAX model)
     result["atom_rep_atom_idx"] = result["distogram_rep_atom_mask"].nonzero()[0]

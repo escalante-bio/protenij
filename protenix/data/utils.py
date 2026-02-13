@@ -22,7 +22,6 @@ from typing import Mapping, Sequence
 
 import biotite.structure as struc
 import numpy as np
-import torch
 from biotite.structure import AtomArray
 from biotite.structure.io import pdbx
 from biotite.structure.io.pdb import PDBFile
@@ -306,7 +305,7 @@ def save_atoms_to_cif(
 
 def save_structure_cif(
     atom_array: AtomArray,
-    pred_coordinate: torch.Tensor,
+    pred_coordinate: np.ndarray,
     output_fpath: str,
     entity_poly_type: dict[str, str],
     pdb_id: str,
@@ -316,13 +315,13 @@ def save_structure_cif(
 
     Args:
         atom_array (AtomArray): The original AtomArray containing the structure.
-        pred_coordinate (torch.Tensor): The predicted coordinates for the structure.
+        pred_coordinate (np.ndarray): The predicted coordinates for the structure.
         output_fpath (str): The output file path for saving the CIF file.
         entity_poly_type (dict[str, str]): The entity poly type information.
         pdb_id (str): The PDB ID for the entry.
     """
     pred_atom_array = copy.deepcopy(atom_array)
-    pred_pose = pred_coordinate.cpu().numpy()
+    pred_pose = np.asarray(pred_coordinate)
     pred_atom_array.coord = pred_pose
     save_atoms_to_cif(
         output_fpath,
@@ -472,9 +471,9 @@ class CIFWriter:
 
 
 def make_dummy_feature(
-    features_dict: Mapping[str, torch.Tensor],
+    features_dict: Mapping[str, np.ndarray],
     dummy_feats: Sequence = ["msa"],
-) -> dict[str, torch.Tensor]:
+) -> dict[str, np.ndarray]:
     num_token = features_dict["token_index"].shape[0]
     num_atom = features_dict["atom_to_token_idx"].shape[0]
     num_msa = 1
@@ -490,47 +489,44 @@ def make_dummy_feature(
     for feat_name in dummy_feats:
         if feat_name not in ["msa", "template"]:
             cur_feat_shape = feat_shape[feat_name]
-            features_dict[feat_name] = torch.zeros(cur_feat_shape)
+            features_dict[feat_name] = np.zeros(cur_feat_shape, dtype=np.float32)
     if "msa" in dummy_feats:
-        # features_dict["msa"] = features_dict["restype"].unsqueeze(0)
-        features_dict["msa"] = torch.nonzero(features_dict["restype"])[:, 1].unsqueeze(
-            0
-        )
+        features_dict["msa"] = np.argmax(features_dict["restype"], axis=-1)[np.newaxis, :]
         assert features_dict["msa"].shape == feat_shape["msa"]
-        features_dict["has_deletion"] = torch.zeros(feat_shape["has_deletion"])
-        features_dict["deletion_value"] = torch.zeros(feat_shape["deletion_value"])
+        features_dict["has_deletion"] = np.zeros(feat_shape["has_deletion"], dtype=np.float32)
+        features_dict["deletion_value"] = np.zeros(feat_shape["deletion_value"], dtype=np.float32)
         features_dict["profile"] = features_dict["restype"]
         assert features_dict["profile"].shape == feat_shape["profile"]
-        features_dict["deletion_mean"] = torch.zeros(feat_shape["deletion_mean"])
+        features_dict["deletion_mean"] = np.zeros(feat_shape["deletion_mean"], dtype=np.float32)
         for key in [
             "prot_pair_num_alignments",
             "prot_unpair_num_alignments",
             "rna_pair_num_alignments",
             "rna_unpair_num_alignments",
         ]:
-            features_dict[key] = torch.tensor(0, dtype=torch.int32)
+            features_dict[key] = np.int32(0)
 
     if "template" in dummy_feats:
-        features_dict["template_restype"] = (
-            torch.ones(feat_shape["template_restype"]) * 31
+        features_dict["template_restype"] = np.full(
+            feat_shape["template_restype"], 31, dtype=np.float32
         )  # gap
-        features_dict["template_all_atom_mask"] = torch.zeros(
-            feat_shape["template_all_atom_mask"]
+        features_dict["template_all_atom_mask"] = np.zeros(
+            feat_shape["template_all_atom_mask"], dtype=np.float32
         )
-        features_dict["template_all_atom_positions"] = torch.zeros(
-            feat_shape["template_all_atom_positions"]
+        features_dict["template_all_atom_positions"] = np.zeros(
+            feat_shape["template_all_atom_positions"], dtype=np.float32
         )
-    if features_dict["msa"].dim() < 2:
+    if features_dict["msa"].ndim < 2:
         raise ValueError(f"msa must be 2D, get shape: {features_dict['msa'].shape}")
     return features_dict
 
 
 def data_type_transform(
-    feat_or_label_dict: Mapping[str, torch.Tensor],
-) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor], AtomArray]:
+    feat_or_label_dict: Mapping[str, np.ndarray],
+) -> tuple[dict[str, np.ndarray], dict[str, np.ndarray], AtomArray]:
     for key, value in feat_or_label_dict.items():
         if key in IntDataList:
-            feat_or_label_dict[key] = value.to(torch.long)
+            feat_or_label_dict[key] = value.astype(np.int64)
 
     return feat_or_label_dict
 

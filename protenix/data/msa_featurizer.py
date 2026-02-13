@@ -23,7 +23,6 @@ from os.path import join as opjoin
 from typing import Any, Mapping, Optional, Sequence, Union
 
 import numpy as np
-import torch
 from biotite.structure import AtomArray
 
 from protenix.data.constants import STD_RESIDUES, rna_order_with_x
@@ -133,7 +132,7 @@ class BaseMSAFeaturizer(ABC):
         self,
         bioassembly_dict: Mapping[str, Any],
         entity_to_asym_id_int: Mapping[str, Sequence[int]],
-        selected_token_indices: Optional[torch.Tensor],
+        selected_token_indices: Optional[np.ndarray],
         entity_ids: set[str],
     ) -> tuple[set[int], set[int], dict[int, str], dict[int, str], dict[str, str]]:
         """
@@ -142,7 +141,7 @@ class BaseMSAFeaturizer(ABC):
         Args:
             bioassembly_dict (Mapping[str, Any]): The bioassembly dictionary containing entity information.
             entity_to_asym_id_int (Mapping[str, Sequence[int]]): Mapping from entity ID to asym ID integers.
-            selected_token_indices (Optional[torch.Tensor]): Indices of selected tokens.
+            selected_token_indices (Optional[np.ndarray]): Indices of selected tokens.
             entity_ids (set[str]): Set of entity IDs to consider.
 
         Returns:
@@ -443,7 +442,7 @@ class PROTMSAFeaturizer(BaseMSAFeaturizer):
         self,
         bioassembly_dict: Mapping[str, Any],
         entity_to_asym_id_int: Mapping[str, Sequence[int]],
-        selected_token_indices: Optional[torch.Tensor],
+        selected_token_indices: Optional[np.ndarray],
     ) -> dict[str, np.ndarray]:
         """
         Get MSA features for the bioassembly.
@@ -600,7 +599,7 @@ class RNAMSAFeaturizer(BaseMSAFeaturizer):
         self,
         bioassembly_dict: Mapping[str, Any],
         entity_to_asym_id_int: Mapping[str, Sequence[int]],
-        selected_token_indices: Optional[torch.Tensor],
+        selected_token_indices: Optional[np.ndarray],
     ) -> dict[str, np.ndarray]:
         """
         Get MSA features for the bioassembly.

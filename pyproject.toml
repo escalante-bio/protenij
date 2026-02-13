@@ -21,11 +21,15 @@ dependencies = [
     "pyyaml>=6.0.2",
     "rdkit>=2025.3.3",
     "safetensors>=0.5.3",
+    "scikit-learn>=1.6.0",
     "scipy>=1.15.3",
     "setuptools>=80.9.0",
-    "torch[cpu]>=2.3.1",
     "tqdm>=4.67.1",
+    "huggingface_hub>=0.20.0",
 ]
+
+[project.optional-dependencies]
+torch = ["torch[cpu]>=2.3.1"]
 
 [tool.uv]
 package = true

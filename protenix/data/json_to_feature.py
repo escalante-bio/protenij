@@ -16,7 +16,6 @@ import copy
 import logging
 
 import numpy as np
-import torch
 from biotite.structure import AtomArray
 
 from protenix.data.constraint_featurizer import ConstraintFeatureGenerator
@@ -288,7 +287,7 @@ class SampleDictToFeatures:
         atom_array = self.add_atom_array_attributes(atom_array, self.entity_poly_type)
         return atom_array
 
-    def get_feature_dict(self) -> tuple[dict[str, torch.Tensor], AtomArray, TokenArray]:
+    def get_feature_dict(self) -> tuple[dict[str, np.ndarray], AtomArray, TokenArray]:
         """
         Generates a feature dictionary from the input sample dictionary.
 
@@ -326,12 +325,12 @@ class SampleDictToFeatures:
         )
 
         # [N_token]
-        feature_dict["has_frame"] = torch.Tensor(
-            token_array_with_frame.get_annotation("has_frame")
-        ).long()
+        feature_dict["has_frame"] = np.asarray(
+            token_array_with_frame.get_annotation("has_frame"), dtype=np.int64
+        )
 
         # [N_token, 3]
-        feature_dict["frame_atom_index"] = torch.Tensor(
-            token_array_with_frame.get_annotation("frame_atom_index")
-        ).long()
+        feature_dict["frame_atom_index"] = np.asarray(
+            token_array_with_frame.get_annotation("frame_atom_index"), dtype=np.int64
+        )
         return feature_dict, atom_array, token_array

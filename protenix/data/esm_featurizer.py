@@ -15,8 +15,14 @@
 import os
 import traceback
 
+import numpy as np
 import pandas as pd
-import torch
+
+try:
+    import torch
+    _HAS_TORCH = True
+except ImportError:
+    _HAS_TORCH = False
 
 from protenix.data.compute_esm import compute_ESM_embeddings, load_esm_model
 from protenix.utils.logger import get_logger
@@ -67,6 +73,8 @@ class ESMFeaturizer:
                 f.write(error_data["error"])
 
     def __call__(self, token_array, atom_array, bioassembly_dict, inference_mode=False):
+        if not _HAS_TORCH:
+            raise ImportError("torch is required for ESM featurization")
 
         # init as zeros
         N_token = len(token_array)

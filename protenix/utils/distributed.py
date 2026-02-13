@@ -14,11 +14,15 @@
 
 import os
 
-import torch
+try:
+    import torch
+    _HAS_TORCH = True
+except ImportError:
+    _HAS_TORCH = False
 
 
 def distributed_available() -> bool:
-    return torch.distributed.is_available() and torch.distributed.is_initialized()
+    return _HAS_TORCH and torch.distributed.is_available() and torch.distributed.is_initialized()
 
 
 class DistWrapper:

@@ -8,7 +8,6 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import numpy as np
-import torch
 import jax
 import jax.numpy as jnp
 from ml_collections.config_dict import ConfigDict
@@ -43,32 +42,19 @@ configs.sample_diffusion["N_step"] = 30
 print(f"Model: {MODEL_NAME}")
 print(f"Pairformer blocks: {configs.model.pairformer.n_blocks}")
 
-# Create PyTorch model + load checkpoint
-from protenix.model.protenix import Protenix as TorchProtenix
+# Load JAX/Equinox model from serialized checkpoint
+import equinox as eqx
+from protenix.backend import load_model
 
-torch_model = TorchProtenix(configs)
-n_params = sum(p.numel() for p in torch_model.parameters())
-print(f"PyTorch model created ({n_params / 1e6:.2f}M params)")
+eqx_path = os.path.join(CACHE_DIR, f"{MODEL_NAME}")
+print(f"Loading JAX model from {eqx_path}...")
+jax_model = load_model(eqx_path)
 
-checkpoint_path = os.path.join(CACHE_DIR, f"{MODEL_NAME}.pt")
-print(f"Loading checkpoint from {checkpoint_path}")
-checkpoint = torch.load(checkpoint_path, map_location="cpu")
-
-# Handle DDP prefix
-sample_key = list(checkpoint["model"].keys())[0]
-if sample_key.startswith("module."):
-    checkpoint["model"] = {k[len("module."):]: v for k, v in checkpoint["model"].items()}
-
-torch_model.load_state_dict(checkpoint["model"], strict=configs.load_strict)
-torch_model.eval()
-print("Checkpoint loaded")
-
-# Convert to JAX/Equinox
-import protenix.protenij  # registers all from_torch converters
-from protenix.backend import from_torch
-
-print("Converting to JAX/Equinox...")
-jax_model = from_torch(torch_model)
+# Override diffusion parameters for vanilla ODE sampling
+jax_model = eqx.tree_at(lambda m: m.gamma0, jax_model, 0.0)
+jax_model = eqx.tree_at(lambda m: m.step_scale_eta, jax_model, 1.0)
+jax_model = eqx.tree_at(lambda m: m.noise_scale_lambda, jax_model, 1.0)
+jax_model = eqx.tree_at(lambda m: m.N_steps, jax_model, 30)
 print("JAX model ready")
 
 # ── 2. Featurize with real MSA (following mosaic pattern) ──────────────────────
@@ -77,7 +63,7 @@ from protenix.data.json_to_feature import SampleDictToFeatures
 from protenix.data.data_pipeline import DataPipeline
 from protenix.data.msa_featurizer import InferenceMSAFeaturizer
 from protenix.data.utils import make_dummy_feature, data_type_transform
-from protenix.utils.torch_utils import dict_to_tensor
+from protenix.utils.torch_utils import dict_to_numpy
 from protenix.runner import msa_search
 
 sample = {
@@ -107,9 +93,9 @@ else:
 print("Featurizing...")
 sample2feat = SampleDictToFeatures(sample)
 features_dict, atom_array, token_array = sample2feat.get_feature_dict()
-features_dict["distogram_rep_atom_mask"] = torch.Tensor(
-    atom_array.distogram_rep_atom_mask
-).long()
+features_dict["distogram_rep_atom_mask"] = np.asarray(
+    atom_array.distogram_rep_atom_mask, dtype=np.int64
+)
 
 # MSA features
 entity_to_asym_id = DataPipeline.get_label_entity_id_to_asym_id_int(atom_array)
@@ -132,7 +118,7 @@ dummy_feats = []
 if len(msa_features) == 0:
     dummy_feats.append("msa")
 else:
-    msa_features = dict_to_tensor(msa_features)
+    msa_features = dict_to_numpy(msa_features)
     features_dict.update(msa_features)
 features_dict = make_dummy_feature(features_dict, dummy_feats=dummy_feats)
 
@@ -150,9 +136,9 @@ if not os.path.exists(TEMPLATE_PDB):
 
 print("Computing template features from PDB...")
 N_token = features_dict["token_index"].shape[0]
-query_aatype = features_dict["restype"].argmax(dim=-1).numpy()
+query_aatype = np.argmax(features_dict["restype"], axis=-1)
 templates = load_templates_from_pdb(TEMPLATE_PDB, TEMPLATE_CHAIN, N_token, query_aatype)
-template_feats = templates.as_torch_dict()
+template_feats = templates.as_protenix_dict()
 features_dict.update(template_feats)
 print(f"  template_aatype: {features_dict['template_aatype'].shape}")
 print(f"  template_distogram: {features_dict['template_distogram'].shape}")
@@ -162,20 +148,18 @@ N_atom = features_dict["atom_to_token_idx"].shape[0]
 N_msa = features_dict["msa"].shape[0]
 print(f"Featurized: {N_token} tokens, {N_atom} atoms, {N_msa} MSA sequences")
 
-# ── 3. Convert Torch Features to JAX Arrays ────────────────────────────────────
+# ── 3. Convert Numpy Features to JAX Arrays ──────────────────────────────────
 
 print("Converting features to JAX...")
 jax_features = {}
 for key, value in features_dict.items():
-    if isinstance(value, torch.Tensor):
-        jax_features[key] = jnp.array(value.numpy())
+    if isinstance(value, np.ndarray):
+        jax_features[key] = jnp.array(value)
     else:
         jax_features[key] = value
 
 # The JAX confidence head indexes by integer array, not boolean mask.
-jax_features["atom_rep_atom_idx"] = np.array(
-    features_dict["distogram_rep_atom_mask"]
-).nonzero()[0]
+jax_features["atom_rep_atom_idx"] = features_dict["distogram_rep_atom_mask"].nonzero()[0]
 
 print(f"atom_rep_atom_idx shape: {jax_features['atom_rep_atom_idx'].shape}")
 
