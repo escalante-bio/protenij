@@ -332,18 +332,16 @@ class Attention(AbstractFromTorch):
     linear_g: Linear | None
     sigmoid: callable
 
-    # TODO: Add mask? Instead of infs....
     def __call__(
         self,
         q_x: Float[Array, "... Q C_q"],
         kv_x: Float[Array, "... K C_k"],
         biases: None | list[Float[Array, "... H Q K"]],
     ) -> Float[Array, "... Q C_v"]:
-        # apply linear
         q = self.linear_q(q_x)
         k = self.linear_k(kv_x)
         v = self.linear_v(kv_x)
-        # and reshape rearrange to heads (..., H, Q/K/V, C_hidden)
+        # reshape to (..., H, Q/K/V, C_hidden)
         q = einops.rearrange(
             q, "... Q (H C_hidden) -> ... H Q C_hidden", H=self.no_heads
         )
@@ -354,21 +352,24 @@ class Attention(AbstractFromTorch):
             v, "... V (H C_hidden) -> ... H V C_hidden", H=self.no_heads
         )
 
-        # scale q
         q = q / np.sqrt(self.c_hidden)
 
-        # compute attention
-        a = jnp.einsum("... h q d, ... h k d -> ... h q k", q, k)
-        # add pairwise biases
-        # todo: not this.
-        for bias in biases:
-            a += bias
+        # sum biases into a single tensor for dot_product_attention
+        bias = biases[0]
+        for b in biases[1:]:
+            bias = bias + b
 
-        a = jax.nn.softmax(a, axis=-1)
+        # dot_product_attention expects (..., seq, heads, dim), swap H and Q/K
+        o = jax.nn.dot_product_attention(
+            query=jnp.swapaxes(q, -3, -2),
+            key=jnp.swapaxes(k, -3, -2),
+            value=jnp.swapaxes(v, -3, -2),
+            bias=bias,
+            scale=1.0,
+        )
+        o = jnp.swapaxes(o, -3, -2)  # back to (..., H, Q, C_hidden)
 
-        a = jnp.einsum("... h q k, ... h k d -> ... h q d", a, v)
-        # equivalent of o = o.transpose(-2, -3)
-        o = einops.rearrange(a, "... H Q C_hidden -> ... Q H C_hidden")
+        o = einops.rearrange(o, "... H Q C_hidden -> ... Q H C_hidden")
         if self.linear_g is not None:
             g = jax.nn.sigmoid(self.linear_g(q_x))
             g = einops.rearrange(

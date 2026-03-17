@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = "==3.12"
 dependencies = [
     "biopython>=1.83",
-    "biotite==1.0.1",
+    "biotite>=1.2.0",
     "einops>=0.8.0",
     "equinox>=0.13.0",
     "gemmi>=0.6.5",
