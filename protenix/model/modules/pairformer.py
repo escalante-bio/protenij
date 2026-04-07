@@ -426,6 +426,7 @@ class MSAStack(nn.Module):
     def __init__(
         self,
         c_m: int = 64,
+        c_z: int = 128,
         c: int = 8,
         dropout: float = 0.15,
         msa_chunk_size: Optional[int] = 2048,
@@ -434,12 +435,13 @@ class MSAStack(nn.Module):
         """
         Args:
             c_m (int, optional): hidden dim [for msa embedding]. Defaults to 64.
+            c_z (int, optional): hidden dim [for pair embedding]. Defaults to 128.
             c (int, optional): hidden [for MSAStack] dim. Defaults to 8.
             dropout (float, optional): dropout ratio. Defaults to 0.15.
         """
         super(MSAStack, self).__init__()
         self.c = c
-        self.msa_pair_weighted_averaging = MSAPairWeightedAveraging(c=self.c)
+        self.msa_pair_weighted_averaging = MSAPairWeightedAveraging(c_m=c_m, c=self.c, c_z=c_z)
         self.dropout_row = DropoutRowwise(dropout)
         self.transition_m = Transition(c_in=c_m, n=4)
         self.msa_chunk_size = msa_chunk_size
@@ -606,6 +608,7 @@ class MSABlock(nn.Module):
             # MSA stack
             self.msa_stack = MSAStack(
                 c_m=self.c_m,
+                c_z=self.c_z,
                 dropout=msa_dropout,
                 msa_chunk_size=msa_chunk_size,
                 msa_max_size=msa_max_size,
