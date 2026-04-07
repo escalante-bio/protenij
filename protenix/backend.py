@@ -139,6 +139,7 @@ KNOWN_MODELS = [
     "protenix_mini_default_v0.5.0",
     "protenix_base_default_v1.0.0",
     "protenix_base_20250630_v1.0.0",
+    "protenix-v2",
 ]
 
 DATA_FILES = [
