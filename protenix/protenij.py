@@ -962,7 +962,8 @@ class MSABlock(eqx.Module):
 
     def __call__(self, m, z, pair_mask, *, key):
         z = z + self.outer_product_mean_msa(m)
-        m = self.msa_stack(m, z, key=key)
+        if self.msa_stack is not None:
+            m = self.msa_stack(m, z, key=key)
         _, z = self.pair_stack(s=None, z=z, pair_mask=pair_mask, key=key)
         return m, z
 
