@@ -48,7 +48,7 @@ from protenix.backend import load_model
 
 eqx_path = os.path.join(CACHE_DIR, f"{MODEL_NAME}")
 print(f"Loading JAX model from {eqx_path}...")
-jax_model = load_model(eqx_path)
+jax_model = load_model(MODEL_NAME)
 
 # Override diffusion parameters for vanilla ODE sampling
 jax_model = eqx.tree_at(lambda m: m.gamma0, jax_model, 0.0)
