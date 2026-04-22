@@ -305,7 +305,6 @@ class TriangleMultiplication(AbstractFromTorch):
     # Static field (part of treedef) so stacking/partitioning never treats the
     # bool as a dynamic leaf — older skeletons default it to False on load.
     use_cueq: bool = eqx.field(default=False, static=True)
-    cueq_highest_precision: bool = eqx.field(default=False, static=True)
 
     @staticmethod
     def from_torch(m):
@@ -377,12 +376,6 @@ class TriangleMultiplication(AbstractFromTorch):
         p_in_b = stack_bias(self.linear_a_p.bias, self.linear_b_p.bias)
         g_in_b = stack_bias(self.linear_a_g.bias, self.linear_b_g.bias)
 
-        from cuequivariance_jax.triangle._utils import Precision as CuexPrecision
-        precision = (
-            CuexPrecision.IEEE
-            if getattr(self, "cueq_highest_precision", False)
-            else CuexPrecision.DEFAULT
-        )
         return cuex.triangle_multiplicative_update(
             z_in,
             direction="outgoing" if self._outgoing else "incoming",
@@ -400,7 +393,6 @@ class TriangleMultiplication(AbstractFromTorch):
             g_out_weight=self.linear_g.weight,
             g_out_bias=self.linear_g.bias,
             eps=self.layer_norm_in.eps,
-            precision=precision,
         )
 
 
@@ -476,7 +468,6 @@ class TriangleAttention(AbstractFromTorch):
     inf: float
     # Static: see TriangleMultiplication.use_cueq for rationale.
     use_cueq: bool = eqx.field(default=False, static=True)
-    cueq_highest_precision: bool = eqx.field(default=False, static=True)
 
     @staticmethod
     def from_torch(m):
@@ -546,16 +537,11 @@ class TriangleAttention(AbstractFromTorch):
             mask_cueq = mask_cueq[None]
 
         scale = 1.0 / math.sqrt(D)
-        # cueq's backward kernel only supports TF32 (DEFAULT); HIGHEST is
-        # fwd-only in 0.8.x. Use HIGHEST only when the caller opts in and
-        # doesn't need gradients.
-        precision = (
-            jax.lax.Precision.HIGHEST
-            if getattr(self, "cueq_highest_precision", False)
-            else jax.lax.Precision.DEFAULT
-        )
+        # TF32 / tensor-core path. HIGHEST (IEEE fp32) lacks a backward kernel
+        # in cueq 0.8.x and only matches baseline precision, which is itself
+        # TF32 on Ampere+, so DEFAULT is the only mode worth supporting.
         out = cuex.triangle_attention(
-            q, k, v, bias, mask_cueq, scale, precision=precision,
+            q, k, v, bias, mask_cueq, scale, precision=jax.lax.Precision.DEFAULT,
         )
         # cueq returns [output, logsumexp, max_val]; keep just the output.
         o = out[0] if isinstance(out, (tuple, list)) else out
