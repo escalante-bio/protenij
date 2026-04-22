@@ -33,6 +33,25 @@ if _HAS_TORCH:
     import protenix.model.protenix
     import protenix.openfold_local.model.primitives
 
+
+# Monkey-patch cuequivariance_jax 0.8.x: its triangle_attention custom_vjp fwd
+# rule returns (a, lse, amax) as a tuple, but the primitive binding returns a
+# list — JAX's custom_vjp matcher rejects the mismatch during backward tracing.
+# Harmless if cueq isn't installed or is never used for a backward pass.
+try:
+    from cuequivariance_jax.triangle._triangle_attention import (
+        triangle_attention_custom_vjp as _cueq_ta_cvjp,
+    )
+    _cueq_orig_fwd = _cueq_ta_cvjp.fwd
+
+    def _cueq_patched_fwd(*args, **kwargs):
+        primal, residuals = _cueq_orig_fwd(*args, **kwargs)
+        return list(primal), residuals
+
+    _cueq_ta_cvjp.fwd = _cueq_patched_fwd
+except ImportError:
+    pass
+
 def move_final_dim_to_dim(x, dim: int):
     # permute_final_dims
     n_dim = len(x.shape)
@@ -283,21 +302,40 @@ class TriangleMultiplication(AbstractFromTorch):
     linear_z: backend.Linear
     sigmoid: any
     _outgoing: bool
+    # Static field (part of treedef) so stacking/partitioning never treats the
+    # bool as a dynamic leaf — older skeletons default it to False on load.
+    use_cueq: bool = eqx.field(default=False, static=True)
+
+    @staticmethod
+    def from_torch(m):
+        return TriangleMultiplication(
+            linear_a_p=from_torch(m.linear_a_p),
+            linear_a_g=from_torch(m.linear_a_g),
+            linear_b_p=from_torch(m.linear_b_p),
+            linear_b_g=from_torch(m.linear_b_g),
+            layer_norm_in=from_torch(m.layer_norm_in),
+            layer_norm_out=from_torch(m.layer_norm_out),
+            linear_g=from_torch(m.linear_g),
+            linear_z=from_torch(m.linear_z),
+            sigmoid=from_torch(m.sigmoid),
+            _outgoing=m._outgoing,
+        )
 
     def __call__(
         self,
         z_in: Float[Array, "... N N C_z"],
         mask: Bool[Array, "... N N"] | None,
     ) -> Float[Array, "... N N C_z"]:
-        #with jax.default_matmul_precision("float32"):
         if mask is None:
             mask = jnp.ones_like(z_in, shape=z_in.shape[:-1])
 
-        mask = mask[..., None]
+        if getattr(self, "use_cueq", False):
+            return self._cueq_forward(z_in, mask)
 
+        mask_e = mask[..., None]
         z = self.layer_norm_in(z_in)
-        a = self.linear_a_p(z) * mask * self.sigmoid(self.linear_a_g(z))
-        b = self.linear_b_p(z) * mask * self.sigmoid(self.linear_b_g(z))
+        a = self.linear_a_p(z) * mask_e * self.sigmoid(self.linear_a_g(z))
+        b = self.linear_b_p(z) * mask_e * self.sigmoid(self.linear_b_g(z))
 
         ### permute_final_dims (2, 0, 1)
         if self._outgoing:
@@ -307,7 +345,6 @@ class TriangleMultiplication(AbstractFromTorch):
             a = einops.rearrange(a, "... a b c -> ... c b a")
             b = einops.rearrange(b, "... a b c -> ... c a b")
         p = a @ b
-        # return p
         x = einops.rearrange(p, "... a b c -> ... b c a")
 
         x = self.layer_norm_out(x)
@@ -316,6 +353,47 @@ class TriangleMultiplication(AbstractFromTorch):
         g = self.sigmoid(self.linear_g(z))
 
         return x * g
+
+    def _cueq_forward(self, z_in, mask):
+        """Triangle multiplicative update via NVIDIA cuequivariance JAX kernel.
+
+        Re-uses existing Linear/LayerNorm weights — cueq wants a/b projections
+        concatenated along the output axis (2*D_in, D_in). No new parameters.
+        """
+        import cuequivariance_jax as cuex
+
+        def stack_bias(ba, bb):
+            if ba is None and bb is None:
+                return None
+            if ba is None:
+                ba = jnp.zeros_like(bb)
+            if bb is None:
+                bb = jnp.zeros_like(ba)
+            return jnp.concatenate([ba, bb], axis=0)
+
+        p_in_w = jnp.concatenate([self.linear_a_p.weight, self.linear_b_p.weight], axis=0)
+        g_in_w = jnp.concatenate([self.linear_a_g.weight, self.linear_b_g.weight], axis=0)
+        p_in_b = stack_bias(self.linear_a_p.bias, self.linear_b_p.bias)
+        g_in_b = stack_bias(self.linear_a_g.bias, self.linear_b_g.bias)
+
+        return cuex.triangle_multiplicative_update(
+            z_in,
+            direction="outgoing" if self._outgoing else "incoming",
+            mask=mask,
+            norm_in_weight=self.layer_norm_in.weight,
+            norm_in_bias=self.layer_norm_in.bias,
+            p_in_weight=p_in_w,
+            p_in_bias=p_in_b,
+            g_in_weight=g_in_w,
+            g_in_bias=g_in_b,
+            norm_out_weight=self.layer_norm_out.weight,
+            norm_out_bias=self.layer_norm_out.bias,
+            p_out_weight=self.linear_z.weight,
+            p_out_bias=self.linear_z.bias,
+            g_out_weight=self.linear_g.weight,
+            g_out_bias=self.linear_g.bias,
+            eps=self.layer_norm_in.eps,
+        )
 
 
 class Attention(AbstractFromTorch):
@@ -388,6 +466,18 @@ class TriangleAttention(AbstractFromTorch):
     linear: Linear
     mha: Attention
     inf: float
+    # Static: see TriangleMultiplication.use_cueq for rationale.
+    use_cueq: bool = eqx.field(default=False, static=True)
+
+    @staticmethod
+    def from_torch(m):
+        return TriangleAttention(
+            starting=m.starting,
+            layer_norm=from_torch(m.layer_norm),
+            linear=from_torch(m.linear),
+            mha=from_torch(m.mha),
+            inf=m.inf,
+        )
 
     def __call__(
         self,
@@ -403,20 +493,69 @@ class TriangleAttention(AbstractFromTorch):
 
         x = self.layer_norm(x)
 
-        # [*, I, 1, 1, J]
-        mask_bias = (self.inf * (mask - 1))[..., :, None, None, :]
-
         # [*, H, I, J]
         triangle_bias = einops.rearrange(self.linear(x), "... A B C -> ... C A B")
         # [*, 1, H, I, J]
         triangle_bias = einops.rearrange(triangle_bias, "... H I J -> ... 1 H I J")
 
-        x = self.mha(q_x=x, kv_x=x, biases=[mask_bias, triangle_bias])
+        if getattr(self, "use_cueq", False):
+            x = self._cueq_forward(x, mask, triangle_bias)
+        else:
+            # [*, I, 1, 1, J]
+            mask_bias = (self.inf * (mask - 1))[..., :, None, None, :]
+            x = self.mha(q_x=x, kv_x=x, biases=[mask_bias, triangle_bias])
 
         if not self.starting:
             x = einops.rearrange(x, "... I J C -> ... J I C")
 
         return x
+
+    def _cueq_forward(self, x, mask, triangle_bias):
+        """Triangle attention via NVIDIA cuequivariance JAX kernel.
+
+        Reuses mha's linear projections, gate, and output projection; only the
+        attention kernel itself is swapped. Checkpoint weights are unchanged.
+        """
+        import cuequivariance_jax as cuex
+
+        mha = self.mha
+        H = mha.no_heads
+        D = mha.c_hidden
+
+        q = einops.rearrange(mha.linear_q(x), "... N S (H D) -> ... N H S D", H=H)
+        k = einops.rearrange(mha.linear_k(x), "... N S (H D) -> ... N H S D", H=H)
+        v = einops.rearrange(mha.linear_v(x), "... N S (H D) -> ... N H S D", H=H)
+
+        # cueq expects rank-5 [B, N, H, S, D]; add a B=1 if absent.
+        added_batch = q.ndim == 4
+        if added_batch:
+            q, k, v = q[None], k[None], v[None]
+
+        bias = triangle_bias if triangle_bias.ndim == 5 else triangle_bias[None]
+        mask_cueq = mask.astype(bool)[..., :, None, None, :]
+        if mask_cueq.ndim == 4:
+            mask_cueq = mask_cueq[None]
+
+        scale = 1.0 / math.sqrt(D)
+        # TF32 / tensor-core path. HIGHEST (IEEE fp32) lacks a backward kernel
+        # in cueq 0.8.x and only matches baseline precision, which is itself
+        # TF32 on Ampere+, so DEFAULT is the only mode worth supporting.
+        out = cuex.triangle_attention(
+            q, k, v, bias, mask_cueq, scale, precision=jax.lax.Precision.DEFAULT,
+        )
+        # cueq returns [output, logsumexp, max_val]; keep just the output.
+        o = out[0] if isinstance(out, (tuple, list)) else out
+
+        if added_batch:
+            o = o[0]
+
+        o = einops.rearrange(o, "... N H S D -> ... N S H D")
+        if mha.linear_g is not None:
+            g = jax.nn.sigmoid(mha.linear_g(x))
+            g = einops.rearrange(g, "... N S (H D) -> ... N S H D", H=H)
+            o = o * g
+        o = einops.rearrange(o, "... N S H D -> ... N S (H D)")
+        return mha.linear_o(o)
 
 
 def _attention(
