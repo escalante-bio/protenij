@@ -122,7 +122,8 @@ default_weighted_pdb_configs = {
     },
 }
 # HARDCODE cache path.
-DATA_ROOT_DIR = str(Path("~/.protenix").expanduser())#os.environ.get("PROTENIX_DATA_ROOT_DIR", str(Path("~/.protenix").expanduser()))
+#DATA_ROOT_DIR = str(Path("~/.protenix").expanduser())
+DATA_ROOT_DIR = os.environ.get("PROTENIJ_CACHE_DIR", str(Path("~/.protenix").expanduser()))
 
 # Use CCD cache created by scripts/gen_ccd_cache.py priority. (without date in filename)
 # See: docs/prepare_data.md

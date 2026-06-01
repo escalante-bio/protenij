@@ -148,7 +148,7 @@ DATA_FILES = [
     "clusters-by-entity-40.txt",
 ]
 
-_CACHE_DIR = os.path.expanduser("~/.protenix")
+_CACHE_DIR = os.environ.get("PROTENIJ_CACHE_DIR", os.path.expanduser("~/.protenix"))
 
 
 def _hf_download(filename: str) -> None:

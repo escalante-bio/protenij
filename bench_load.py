@@ -1,6 +1,7 @@
 """Benchmark: PyTorch-path vs Equinox-path model loading."""
 import os
-os.environ["PROTENIX_DATA_ROOT_DIR"] = os.path.expanduser("~/.protenix")
+CACHE_DIR = os.environ.get("PROTENIJ_CACHE_DIR", os.path.expanduser("~/.protenix"))
+os.environ["PROTENIX_DATA_ROOT_DIR"] = CACHE_DIR
 
 import time
 import jax
@@ -16,7 +17,6 @@ from protenij.configs.configs_model_type import model_configs
 from protenij.config import parse_configs
 
 MODEL_NAME = "protenix_base_default_v1.0.0"
-CACHE_DIR = os.path.expanduser("~/.protenix")
 EQX_PATH = os.path.join(CACHE_DIR, MODEL_NAME)  # will produce .eqx + .skeleton.pkl
 
 

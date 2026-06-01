@@ -1,6 +1,7 @@
 """Test loading a Protenix checkpoint and converting to JAX/Equinox."""
 import os
-os.environ["PROTENIX_DATA_ROOT_DIR"] = os.path.expanduser("~/.protenix")
+CACHE_DIR = os.environ.get("PROTENIJ_CACHE_DIR", os.path.expanduser("~/.protenix"))
+os.environ["PROTENIX_DATA_ROOT_DIR"] = CACHE_DIR
 
 import torch
 from ml_collections.config_dict import ConfigDict
@@ -12,7 +13,6 @@ from protenij.configs.configs_model_type import model_configs
 from protenij.config import parse_configs
 
 MODEL_NAME = "protenix_base_default_v1.0.0"
-CACHE_DIR = os.path.expanduser("~/.protenix")
 
 # 1. Build configs
 configs_base["use_deepspeed_evo_attention"] = False

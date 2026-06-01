@@ -1,6 +1,7 @@
 """Test two-chain complex prediction with template for only one chain."""
 import os
-os.environ["PROTENIX_DATA_ROOT_DIR"] = os.path.expanduser("~/.protenix")
+CACHE_DIR = os.environ.get("PROTENIJ_CACHE_DIR", os.path.expanduser("~/.protenix"))
+os.environ["PROTENIX_DATA_ROOT_DIR"] = CACHE_DIR
 
 import copy
 from pathlib import Path
@@ -22,7 +23,6 @@ from protenij.config import parse_configs
 # ── 1. Config + Model Loading ──────────────────────────────────────────────────
 
 MODEL_NAME = "protenix_base_default_v1.0.0"
-CACHE_DIR = os.path.expanduser("~/.protenix")
 OUTPUT_DIR = "./output_two_chain"
 
 configs_base["use_deepspeed_evo_attention"] = False
