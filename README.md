@@ -31,7 +31,7 @@ Pre-converted Equinox models skip the PyTorch dependency entirely and load in un
 Models are hosted on [HuggingFace](https://huggingface.co/nickrb/protenij) and downloaded automatically on first use.
 
 ```python
-from protenix.backend import load_model
+from protenij.backend import load_model
 
 # Downloads from HuggingFace, caches to ~/.protenix/
 model = load_model("protenix_base_default_v1.0.0")

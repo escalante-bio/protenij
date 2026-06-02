@@ -12,11 +12,11 @@ import jax.numpy as jnp
 import gemmi
 from ml_collections.config_dict import ConfigDict
 
-from protenix.configs.configs_base import configs as configs_base
-from protenix.configs.configs_data import data_configs
-from protenix.configs.configs_inference import inference_configs
-from protenix.configs.configs_model_type import model_configs
-from protenix.config import parse_configs
+from protenij.configs.configs_base import configs as configs_base
+from protenij.configs.configs_data import data_configs
+from protenij.configs.configs_inference import inference_configs
+from protenij.configs.configs_model_type import model_configs
+from protenij.config import parse_configs
 
 
 # ── 1. Config + Model Loading ──────────────────────────────────────────────────
@@ -40,7 +40,7 @@ configs.sample_diffusion["N_step"] = 30
 print(f"Model: {MODEL_NAME}")
 
 # Create PyTorch model + load checkpoint
-from protenix.model.protenix import Protenix as TorchProtenix
+from protenij.model.protenix import Protenix as TorchProtenix
 
 torch_model = TorchProtenix(configs)
 n_params = sum(p.numel() for p in torch_model.parameters())
@@ -60,8 +60,8 @@ torch_model.eval()
 print("Checkpoint loaded")
 
 # Convert to JAX/Equinox
-import protenix.protenij
-from protenix.backend import from_torch
+import protenij.protenij
+from protenij.backend import from_torch
 
 print("Converting to JAX/Equinox...")
 jax_model = from_torch(torch_model)
@@ -84,7 +84,7 @@ print(f"Total: {len(SEQUENCE_A) + len(SEQUENCE_B)} residues")
 
 # ── 3. Featurize ────────────────────────────────────────────────────────────────
 
-from protenix.data.template import ChainInput, featurize
+from protenij.data.template import ChainInput, featurize
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 

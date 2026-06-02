@@ -9,11 +9,11 @@ import numpy as np
 import torch
 from ml_collections.config_dict import ConfigDict
 
-from protenix.configs.configs_base import configs as configs_base
-from protenix.configs.configs_data import data_configs
-from protenix.configs.configs_inference import inference_configs
-from protenix.configs.configs_model_type import model_configs
-from protenix.config import parse_configs
+from protenij.configs.configs_base import configs as configs_base
+from protenij.configs.configs_data import data_configs
+from protenij.configs.configs_inference import inference_configs
+from protenij.configs.configs_model_type import model_configs
+from protenij.config import parse_configs
 
 MODEL_NAME = "protenix_base_default_v1.0.0"
 CACHE_DIR = os.path.expanduser("~/.protenix")
@@ -32,9 +32,9 @@ def build_configs():
 
 def load_torch_path(configs):
     """Load model via PyTorch, return (jax_model, timings_dict)."""
-    from protenix.model.protenix import Protenix as TorchProtenix
-    import protenix.protenij
-    from protenix.backend import from_torch
+    from protenij.model.protenix import Protenix as TorchProtenix
+    import protenij.protenij
+    from protenij.backend import from_torch
 
     # Step 1: torch.load + DDP strip
     checkpoint_path = os.path.join(CACHE_DIR, f"{MODEL_NAME}.pt")
@@ -72,11 +72,11 @@ def load_torch_path(configs):
 
 def load_eqx_path():
     """Load model via Equinox serialization, return (jax_model, timings_dict)."""
-    from protenix.backend import load_model
+    from protenij.backend import load_model
 
     # Step 1: pickle.load skeleton
     t0 = time.perf_counter()
-    import protenix.protenij  # ensure pytree node types are registered
+    import protenij.protenij  # ensure pytree node types are registered
     import pickle
     with open(f"{EQX_PATH}.skeleton.pkl", "rb") as f:
         skeleton = pickle.load(f)
@@ -125,7 +125,7 @@ def main():
 
     # -- Save if needed --
     if not eqx_exists:
-        from protenix.backend import save_model
+        from protenij.backend import save_model
 
         print(f"\nSaving Equinox model to {EQX_PATH}.eqx ...")
         t0 = time.perf_counter()
