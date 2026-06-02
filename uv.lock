@@ -2,25 +2,20 @@ version = 1
 revision = 3
 requires-python = "==3.12.*"
 resolution-markers = [
-    "sys_platform == 'win32' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch'",
-    "sys_platform == 'emscripten' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch'",
-    "sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch'",
-    "sys_platform == 'darwin' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch'",
-    "sys_platform == 'win32' and extra != 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128' and extra != 'extra-8-protenij-torch'",
-    "sys_platform == 'emscripten' and extra != 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128' and extra != 'extra-8-protenij-torch'",
-    "sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128' and extra != 'extra-8-protenij-torch'",
-    "sys_platform == 'win32' and extra == 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra != 'extra-8-protenij-torch'",
-    "sys_platform == 'emscripten' and extra == 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra != 'extra-8-protenij-torch'",
-    "sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra == 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra != 'extra-8-protenij-torch'",
-    "sys_platform == 'darwin' and extra == 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra != 'extra-8-protenij-torch'",
-    "sys_platform == 'win32' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra != 'extra-8-protenij-torch'",
-    "sys_platform == 'emscripten' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra != 'extra-8-protenij-torch'",
-    "sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra != 'extra-8-protenij-torch'",
+    "sys_platform == 'win32' and extra != 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128'",
+    "sys_platform == 'emscripten' and extra != 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128'",
+    "sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128'",
+    "sys_platform == 'win32' and extra == 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128'",
+    "sys_platform == 'emscripten' and extra == 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128'",
+    "sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra == 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128'",
+    "sys_platform == 'darwin' and extra == 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128'",
+    "sys_platform == 'win32' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128'",
+    "sys_platform == 'emscripten' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128'",
+    "sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128'",
 ]
 conflicts = [[
     { package = "protenij", extra = "pytorch-cpu" },
     { package = "protenij", extra = "pytorch-cu128" },
-    { package = "protenij", extra = "torch" },
 ]]
 
 [manifest]
@@ -149,7 +144,7 @@ name = "click"
 version = "8.3.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "colorama", marker = "sys_platform == 'win32' or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-torch') or (extra == 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch')" },
+    { name = "colorama", marker = "sys_platform == 'win32' or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/bb/63/f9e1ea081ce35720d8b92acde70daaedace594dc93b693c869e0d5910718/click-8.3.3.tar.gz", hash = "sha256:398329ad4837b2ff7cbe1dd166a4c0f8900c3ca3a218de04466f38f6497f18a2", size = 328061, upload-time = "2026-04-22T15:11:27.506Z" }
 wheels = [
@@ -346,7 +341,7 @@ source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "filelock" },
     { name = "fsspec" },
-    { name = "hf-xet", marker = "platform_machine == 'AMD64' or platform_machine == 'aarch64' or platform_machine == 'amd64' or platform_machine == 'arm64' or platform_machine == 'x86_64' or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-torch') or (extra == 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch')" },
+    { name = "hf-xet", marker = "platform_machine == 'AMD64' or platform_machine == 'aarch64' or platform_machine == 'amd64' or platform_machine == 'arm64' or platform_machine == 'x86_64' or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128')" },
     { name = "httpx" },
     { name = "packaging" },
     { name = "pyyaml" },
@@ -431,28 +426,28 @@ wheels = [
 
 [package.optional-dependencies]
 with-cuda = [
-    { name = "nvidia-cublas-cu12", version = "12.8.4.1", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform == 'linux' and extra == 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-torch')" },
-    { name = "nvidia-cublas-cu12", version = "12.9.2.10", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform == 'linux' and extra == 'extra-8-protenij-pytorch-cpu') or (sys_platform == 'linux' and extra != 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-torch') or (extra == 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch')" },
-    { name = "nvidia-cuda-cupti-cu12", version = "12.8.90", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform == 'linux' and extra == 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-torch')" },
-    { name = "nvidia-cuda-cupti-cu12", version = "12.9.79", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform == 'linux' and extra == 'extra-8-protenij-pytorch-cpu') or (sys_platform == 'linux' and extra != 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-torch') or (extra == 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch')" },
-    { name = "nvidia-cuda-nvcc-cu12", marker = "sys_platform == 'linux' or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-torch') or (extra == 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch')" },
-    { name = "nvidia-cuda-nvrtc-cu12", version = "12.8.93", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform == 'linux' and extra == 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-torch')" },
-    { name = "nvidia-cuda-nvrtc-cu12", version = "12.9.86", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform == 'linux' and extra == 'extra-8-protenij-pytorch-cpu') or (sys_platform == 'linux' and extra != 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-torch') or (extra == 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch')" },
-    { name = "nvidia-cuda-runtime-cu12", version = "12.8.90", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform == 'linux' and extra == 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-torch')" },
-    { name = "nvidia-cuda-runtime-cu12", version = "12.9.79", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform == 'linux' and extra == 'extra-8-protenij-pytorch-cpu') or (sys_platform == 'linux' and extra != 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-torch') or (extra == 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch')" },
+    { name = "nvidia-cublas-cu12", version = "12.8.4.1", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform == 'linux' and extra == 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128')" },
+    { name = "nvidia-cublas-cu12", version = "12.9.2.10", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform == 'linux' and extra == 'extra-8-protenij-pytorch-cpu') or (sys_platform == 'linux' and extra != 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128')" },
+    { name = "nvidia-cuda-cupti-cu12", version = "12.8.90", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform == 'linux' and extra == 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128')" },
+    { name = "nvidia-cuda-cupti-cu12", version = "12.9.79", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform == 'linux' and extra == 'extra-8-protenij-pytorch-cpu') or (sys_platform == 'linux' and extra != 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128')" },
+    { name = "nvidia-cuda-nvcc-cu12", marker = "sys_platform == 'linux' or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128')" },
+    { name = "nvidia-cuda-nvrtc-cu12", version = "12.8.93", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform == 'linux' and extra == 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128')" },
+    { name = "nvidia-cuda-nvrtc-cu12", version = "12.9.86", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform == 'linux' and extra == 'extra-8-protenij-pytorch-cpu') or (sys_platform == 'linux' and extra != 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128')" },
+    { name = "nvidia-cuda-runtime-cu12", version = "12.8.90", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform == 'linux' and extra == 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128')" },
+    { name = "nvidia-cuda-runtime-cu12", version = "12.9.79", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform == 'linux' and extra == 'extra-8-protenij-pytorch-cpu') or (sys_platform == 'linux' and extra != 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128')" },
     { name = "nvidia-cudnn-cu12" },
-    { name = "nvidia-cufft-cu12", version = "11.3.3.83", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform == 'linux' and extra == 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-torch')" },
-    { name = "nvidia-cufft-cu12", version = "11.4.1.4", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform == 'linux' and extra == 'extra-8-protenij-pytorch-cpu') or (sys_platform == 'linux' and extra != 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-torch') or (extra == 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch')" },
-    { name = "nvidia-cusolver-cu12", version = "11.7.3.90", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform == 'linux' and extra == 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-torch')" },
-    { name = "nvidia-cusolver-cu12", version = "11.7.5.82", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform == 'linux' and extra == 'extra-8-protenij-pytorch-cpu') or (sys_platform == 'linux' and extra != 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-torch') or (extra == 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch')" },
-    { name = "nvidia-cusparse-cu12", version = "12.5.8.93", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform == 'linux' and extra == 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-torch')" },
-    { name = "nvidia-cusparse-cu12", version = "12.5.10.65", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform == 'linux' and extra == 'extra-8-protenij-pytorch-cpu') or (sys_platform == 'linux' and extra != 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-torch') or (extra == 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch')" },
-    { name = "nvidia-nccl-cu12", version = "2.28.9", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform == 'linux' and extra == 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-torch')" },
-    { name = "nvidia-nccl-cu12", version = "2.30.4", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform == 'linux' and extra == 'extra-8-protenij-pytorch-cpu') or (sys_platform == 'linux' and extra != 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-torch') or (extra == 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch')" },
-    { name = "nvidia-nvjitlink-cu12", version = "12.8.93", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform == 'linux' and extra == 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-torch')" },
-    { name = "nvidia-nvjitlink-cu12", version = "12.9.86", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform == 'linux' and extra == 'extra-8-protenij-pytorch-cpu') or (sys_platform == 'linux' and extra != 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-torch') or (extra == 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch')" },
-    { name = "nvidia-nvshmem-cu12", version = "3.4.5", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform == 'linux' and extra == 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-torch')" },
-    { name = "nvidia-nvshmem-cu12", version = "3.6.5", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform == 'linux' and extra == 'extra-8-protenij-pytorch-cpu') or (sys_platform == 'linux' and extra != 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-torch') or (extra == 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch')" },
+    { name = "nvidia-cufft-cu12", version = "11.3.3.83", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform == 'linux' and extra == 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128')" },
+    { name = "nvidia-cufft-cu12", version = "11.4.1.4", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform == 'linux' and extra == 'extra-8-protenij-pytorch-cpu') or (sys_platform == 'linux' and extra != 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128')" },
+    { name = "nvidia-cusolver-cu12", version = "11.7.3.90", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform == 'linux' and extra == 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128')" },
+    { name = "nvidia-cusolver-cu12", version = "11.7.5.82", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform == 'linux' and extra == 'extra-8-protenij-pytorch-cpu') or (sys_platform == 'linux' and extra != 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128')" },
+    { name = "nvidia-cusparse-cu12", version = "12.5.8.93", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform == 'linux' and extra == 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128')" },
+    { name = "nvidia-cusparse-cu12", version = "12.5.10.65", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform == 'linux' and extra == 'extra-8-protenij-pytorch-cpu') or (sys_platform == 'linux' and extra != 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128')" },
+    { name = "nvidia-nccl-cu12", version = "2.28.9", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform == 'linux' and extra == 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128')" },
+    { name = "nvidia-nccl-cu12", version = "2.30.4", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform == 'linux' and extra == 'extra-8-protenij-pytorch-cpu') or (sys_platform == 'linux' and extra != 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128')" },
+    { name = "nvidia-nvjitlink-cu12", version = "12.8.93", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform == 'linux' and extra == 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128')" },
+    { name = "nvidia-nvjitlink-cu12", version = "12.9.86", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform == 'linux' and extra == 'extra-8-protenij-pytorch-cpu') or (sys_platform == 'linux' and extra != 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128')" },
+    { name = "nvidia-nvshmem-cu12", version = "3.4.5", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform == 'linux' and extra == 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128')" },
+    { name = "nvidia-nvshmem-cu12", version = "3.6.5", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform == 'linux' and extra == 'extra-8-protenij-pytorch-cpu') or (sys_platform == 'linux' and extra != 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128')" },
 ]
 
 [[package]]
@@ -657,22 +652,18 @@ name = "nvidia-cublas-cu12"
 version = "12.9.2.10"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "sys_platform == 'win32' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch'",
-    "sys_platform == 'emscripten' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch'",
-    "sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch'",
-    "sys_platform == 'darwin' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch'",
-    "sys_platform == 'win32' and extra != 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128' and extra != 'extra-8-protenij-torch'",
-    "sys_platform == 'emscripten' and extra != 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128' and extra != 'extra-8-protenij-torch'",
-    "sys_platform == 'win32' and extra == 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra != 'extra-8-protenij-torch'",
-    "sys_platform == 'emscripten' and extra == 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra != 'extra-8-protenij-torch'",
-    "sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra == 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra != 'extra-8-protenij-torch'",
-    "sys_platform == 'darwin' and extra == 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra != 'extra-8-protenij-torch'",
-    "sys_platform == 'win32' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra != 'extra-8-protenij-torch'",
-    "sys_platform == 'emscripten' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra != 'extra-8-protenij-torch'",
-    "sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra != 'extra-8-protenij-torch'",
+    "sys_platform == 'win32' and extra != 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128'",
+    "sys_platform == 'emscripten' and extra != 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128'",
+    "sys_platform == 'win32' and extra == 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128'",
+    "sys_platform == 'emscripten' and extra == 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128'",
+    "sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra == 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128'",
+    "sys_platform == 'darwin' and extra == 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128'",
+    "sys_platform == 'win32' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128'",
+    "sys_platform == 'emscripten' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128'",
+    "sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128'",
 ]
 dependencies = [
-    { name = "nvidia-cuda-nvrtc-cu12", version = "12.9.86", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform == 'emscripten' or sys_platform == 'win32' or extra == 'extra-8-protenij-pytorch-cpu' or extra != 'extra-8-protenij-pytorch-cu128' or (extra == 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch')" },
+    { name = "nvidia-cuda-nvrtc-cu12", version = "12.9.86", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform == 'emscripten' or sys_platform == 'win32' or extra == 'extra-8-protenij-pytorch-cpu' or extra != 'extra-8-protenij-pytorch-cu128'" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/f7/a2/c96163a0fff1839c0c9548bbdeae7b853b867009e33b9b9264adc238b1cf/nvidia_cublas_cu12-12.9.2.10-py3-none-manylinux_2_27_aarch64.whl", hash = "sha256:5572131a59c3eebeeb1c4c8144f772d49372c20124916e072a0e3fc30df421d5", size = 575012079, upload-time = "2026-04-08T18:51:47.303Z" },
@@ -708,9 +699,8 @@ name = "nvidia-cuda-cupti-cu12"
 version = "12.9.79"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch'",
-    "sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra == 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra != 'extra-8-protenij-torch'",
-    "sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra != 'extra-8-protenij-torch'",
+    "sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra == 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128'",
+    "sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128'",
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b4/78/351b5c8cdbd9a6b4fb0d6ee73fb176dcdc1b6b6ad47c2ffff5ae8ca4a1f7/nvidia_cuda_cupti_cu12-12.9.79-py3-none-manylinux_2_25_aarch64.whl", hash = "sha256:791853b030602c6a11d08b5578edfb957cadea06e9d3b26adbf8d036135a4afe", size = 10077166, upload-time = "2025-06-05T20:01:01.385Z" },
@@ -746,19 +736,15 @@ name = "nvidia-cuda-nvrtc-cu12"
 version = "12.9.86"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "sys_platform == 'win32' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch'",
-    "sys_platform == 'emscripten' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch'",
-    "sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch'",
-    "sys_platform == 'darwin' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch'",
-    "sys_platform == 'win32' and extra != 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128' and extra != 'extra-8-protenij-torch'",
-    "sys_platform == 'emscripten' and extra != 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128' and extra != 'extra-8-protenij-torch'",
-    "sys_platform == 'win32' and extra == 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra != 'extra-8-protenij-torch'",
-    "sys_platform == 'emscripten' and extra == 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra != 'extra-8-protenij-torch'",
-    "sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra == 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra != 'extra-8-protenij-torch'",
-    "sys_platform == 'darwin' and extra == 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra != 'extra-8-protenij-torch'",
-    "sys_platform == 'win32' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra != 'extra-8-protenij-torch'",
-    "sys_platform == 'emscripten' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra != 'extra-8-protenij-torch'",
-    "sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra != 'extra-8-protenij-torch'",
+    "sys_platform == 'win32' and extra != 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128'",
+    "sys_platform == 'emscripten' and extra != 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128'",
+    "sys_platform == 'win32' and extra == 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128'",
+    "sys_platform == 'emscripten' and extra == 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128'",
+    "sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra == 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128'",
+    "sys_platform == 'darwin' and extra == 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128'",
+    "sys_platform == 'win32' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128'",
+    "sys_platform == 'emscripten' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128'",
+    "sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128'",
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b8/85/e4af82cc9202023862090bfca4ea827d533329e925c758f0cde964cb54b7/nvidia_cuda_nvrtc_cu12-12.9.86-py3-none-manylinux2010_x86_64.manylinux_2_12_x86_64.whl", hash = "sha256:210cf05005a447e29214e9ce50851e83fc5f4358df8b453155d5e1918094dcb4", size = 89568129, upload-time = "2025-06-05T20:02:41.973Z" },
@@ -784,9 +770,8 @@ name = "nvidia-cuda-runtime-cu12"
 version = "12.9.79"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch'",
-    "sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra == 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra != 'extra-8-protenij-torch'",
-    "sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra != 'extra-8-protenij-torch'",
+    "sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra == 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128'",
+    "sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128'",
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/bc/e0/0279bd94539fda525e0c8538db29b72a5a8495b0c12173113471d28bce78/nvidia_cuda_runtime_cu12-12.9.79-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:83469a846206f2a733db0c42e223589ab62fd2fabac4432d2f8802de4bded0a4", size = 3515012, upload-time = "2025-06-05T20:00:35.519Z" },
@@ -799,8 +784,8 @@ name = "nvidia-cudnn-cu12"
 version = "9.22.0.52"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "nvidia-cublas-cu12", version = "12.8.4.1", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform != 'emscripten' and sys_platform != 'win32' and extra == 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'emscripten' and extra == 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch') or (sys_platform == 'win32' and extra == 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-torch')" },
-    { name = "nvidia-cublas-cu12", version = "12.9.2.10", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform == 'emscripten' or sys_platform == 'win32' or extra == 'extra-8-protenij-pytorch-cpu' or extra != 'extra-8-protenij-pytorch-cu128' or (extra == 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch')" },
+    { name = "nvidia-cublas-cu12", version = "12.8.4.1", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform != 'emscripten' and sys_platform != 'win32' and extra == 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'emscripten' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'win32' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128')" },
+    { name = "nvidia-cublas-cu12", version = "12.9.2.10", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform == 'emscripten' or sys_platform == 'win32' or extra == 'extra-8-protenij-pytorch-cpu' or extra != 'extra-8-protenij-pytorch-cu128'" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/51/ff/c6a098c1e0bccc68aac5f1684526cf8936abb7024dcc46dca315b8a6f47f/nvidia_cudnn_cu12-9.22.0.52-py3-none-manylinux_2_27_aarch64.whl", hash = "sha256:cd9011812498376f866b9826331cc965ac922eb2df8549c9f2989f10255e5001", size = 774536507, upload-time = "2026-05-08T15:36:09.067Z" },
@@ -816,7 +801,7 @@ resolution-markers = [
     "sys_platform != 'emscripten' and sys_platform != 'win32'",
 ]
 dependencies = [
-    { name = "nvidia-nvjitlink-cu12", version = "12.8.93", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform != 'emscripten' and sys_platform != 'win32' and extra == 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'emscripten' and extra == 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch') or (sys_platform == 'win32' and extra == 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-torch')" },
+    { name = "nvidia-nvjitlink-cu12", version = "12.8.93", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform != 'emscripten' and sys_platform != 'win32' and extra == 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'emscripten' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'win32' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128')" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/60/bc/7771846d3a0272026c416fbb7e5f4c1f146d6d80704534d0b187dd6f4800/nvidia_cufft_cu12-11.3.3.83-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:848ef7224d6305cdb2a4df928759dca7b1201874787083b6e7550dd6765ce69a", size = 193109211, upload-time = "2025-03-07T01:44:56.873Z" },
@@ -829,12 +814,11 @@ name = "nvidia-cufft-cu12"
 version = "11.4.1.4"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch'",
-    "sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra == 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra != 'extra-8-protenij-torch'",
-    "sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra != 'extra-8-protenij-torch'",
+    "sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra == 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128'",
+    "sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128'",
 ]
 dependencies = [
-    { name = "nvidia-nvjitlink-cu12", version = "12.9.86", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra == 'extra-8-protenij-pytorch-cpu') or (sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'darwin' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'darwin' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-torch') or (sys_platform == 'emscripten' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'emscripten' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-torch') or (sys_platform == 'win32' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'win32' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-torch') or (sys_platform == 'darwin' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra != 'extra-8-protenij-torch') or (extra != 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch')" },
+    { name = "nvidia-nvjitlink-cu12", version = "12.9.86", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra == 'extra-8-protenij-pytorch-cpu') or (sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'darwin' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'darwin' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'emscripten' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'win32' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128')" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/9b/2b/76445b0af890da61b501fde30650a1a4bd910607261b209cccb5235d3daa/nvidia_cufft_cu12-11.4.1.4-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:1a28c9b12260a1aa7a8fd12f5ebd82d027963d635ba82ff39a1acfa7c4c0fbcf", size = 200822453, upload-time = "2025-06-05T20:05:27.889Z" },
@@ -869,9 +853,9 @@ resolution-markers = [
     "sys_platform != 'emscripten' and sys_platform != 'win32'",
 ]
 dependencies = [
-    { name = "nvidia-cublas-cu12", version = "12.8.4.1", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform != 'emscripten' and sys_platform != 'win32' and extra == 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'emscripten' and extra == 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch') or (sys_platform == 'win32' and extra == 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-torch')" },
-    { name = "nvidia-cusparse-cu12", version = "12.5.8.93", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform != 'emscripten' and sys_platform != 'win32' and extra == 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'emscripten' and extra == 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch') or (sys_platform == 'win32' and extra == 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-torch')" },
-    { name = "nvidia-nvjitlink-cu12", version = "12.8.93", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform != 'emscripten' and sys_platform != 'win32' and extra == 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'emscripten' and extra == 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch') or (sys_platform == 'win32' and extra == 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-torch')" },
+    { name = "nvidia-cublas-cu12", version = "12.8.4.1", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform != 'emscripten' and sys_platform != 'win32' and extra == 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'emscripten' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'win32' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128')" },
+    { name = "nvidia-cusparse-cu12", version = "12.5.8.93", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform != 'emscripten' and sys_platform != 'win32' and extra == 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'emscripten' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'win32' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128')" },
+    { name = "nvidia-nvjitlink-cu12", version = "12.8.93", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform != 'emscripten' and sys_platform != 'win32' and extra == 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'emscripten' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'win32' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128')" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c8/32/f7cd6ce8a7690544d084ea21c26e910a97e077c9b7f07bf5de623ee19981/nvidia_cusolver_cu12-11.7.3.90-py3-none-manylinux_2_27_aarch64.whl", hash = "sha256:db9ed69dbef9715071232caa9b69c52ac7de3a95773c2db65bdba85916e4e5c0", size = 267229841, upload-time = "2025-03-07T01:46:54.356Z" },
@@ -884,14 +868,13 @@ name = "nvidia-cusolver-cu12"
 version = "11.7.5.82"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch'",
-    "sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra == 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra != 'extra-8-protenij-torch'",
-    "sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra != 'extra-8-protenij-torch'",
+    "sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra == 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128'",
+    "sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128'",
 ]
 dependencies = [
-    { name = "nvidia-cublas-cu12", version = "12.9.2.10", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra == 'extra-8-protenij-pytorch-cpu') or (sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'darwin' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'darwin' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-torch') or (sys_platform == 'emscripten' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'emscripten' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-torch') or (sys_platform == 'win32' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'win32' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-torch') or (sys_platform == 'darwin' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra != 'extra-8-protenij-torch') or (extra != 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch')" },
-    { name = "nvidia-cusparse-cu12", version = "12.5.10.65", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra == 'extra-8-protenij-pytorch-cpu') or (sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'darwin' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'darwin' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-torch') or (sys_platform == 'emscripten' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'emscripten' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-torch') or (sys_platform == 'win32' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'win32' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-torch') or (sys_platform == 'darwin' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra != 'extra-8-protenij-torch') or (extra != 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch')" },
-    { name = "nvidia-nvjitlink-cu12", version = "12.9.86", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra == 'extra-8-protenij-pytorch-cpu') or (sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'darwin' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'darwin' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-torch') or (sys_platform == 'emscripten' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'emscripten' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-torch') or (sys_platform == 'win32' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'win32' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-torch') or (sys_platform == 'darwin' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra != 'extra-8-protenij-torch') or (extra != 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch')" },
+    { name = "nvidia-cublas-cu12", version = "12.9.2.10", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra == 'extra-8-protenij-pytorch-cpu') or (sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'darwin' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'darwin' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'emscripten' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'win32' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128')" },
+    { name = "nvidia-cusparse-cu12", version = "12.5.10.65", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra == 'extra-8-protenij-pytorch-cpu') or (sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'darwin' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'darwin' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'emscripten' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'win32' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128')" },
+    { name = "nvidia-nvjitlink-cu12", version = "12.9.86", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra == 'extra-8-protenij-pytorch-cpu') or (sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'darwin' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'darwin' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'emscripten' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'win32' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128')" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/03/99/686ff9bf3a82a531c62b1a5c614476e8dfa24a9d89067aeedf3592ee4538/nvidia_cusolver_cu12-11.7.5.82-py3-none-manylinux_2_27_aarch64.whl", hash = "sha256:62efa83e4ace59a4c734d052bb72158e888aa7b770e1a5f601682f16fe5b4fd2", size = 337869834, upload-time = "2025-06-05T20:06:53.125Z" },
@@ -907,7 +890,7 @@ resolution-markers = [
     "sys_platform != 'emscripten' and sys_platform != 'win32'",
 ]
 dependencies = [
-    { name = "nvidia-nvjitlink-cu12", version = "12.8.93", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform != 'emscripten' and sys_platform != 'win32' and extra == 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'emscripten' and extra == 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch') or (sys_platform == 'win32' and extra == 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-torch')" },
+    { name = "nvidia-nvjitlink-cu12", version = "12.8.93", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform != 'emscripten' and sys_platform != 'win32' and extra == 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'emscripten' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'win32' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128')" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/bc/f7/cd777c4109681367721b00a106f491e0d0d15cfa1fd59672ce580ce42a97/nvidia_cusparse_cu12-12.5.8.93-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:9b6c161cb130be1a07a27ea6923df8141f3c295852f4b260c65f18f3e0a091dc", size = 288117129, upload-time = "2025-03-07T01:47:40.407Z" },
@@ -920,12 +903,11 @@ name = "nvidia-cusparse-cu12"
 version = "12.5.10.65"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch'",
-    "sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra == 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra != 'extra-8-protenij-torch'",
-    "sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra != 'extra-8-protenij-torch'",
+    "sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra == 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128'",
+    "sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128'",
 ]
 dependencies = [
-    { name = "nvidia-nvjitlink-cu12", version = "12.9.86", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra == 'extra-8-protenij-pytorch-cpu') or (sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'darwin' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'darwin' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-torch') or (sys_platform == 'emscripten' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'emscripten' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-torch') or (sys_platform == 'win32' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'win32' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-torch') or (sys_platform == 'darwin' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra != 'extra-8-protenij-torch') or (extra != 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch')" },
+    { name = "nvidia-nvjitlink-cu12", version = "12.9.86", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra == 'extra-8-protenij-pytorch-cpu') or (sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'darwin' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'darwin' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'emscripten' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'win32' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128')" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/5e/6f/8710fbd17cdd1d0fc3fea7d36d5b65ce1933611c31e1861da330206b253a/nvidia_cusparse_cu12-12.5.10.65-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:221c73e7482dd93eda44e65ce567c031c07e2f93f6fa0ecd3ba876a195023e83", size = 366359408, upload-time = "2025-06-05T20:07:42.501Z" },
@@ -960,9 +942,8 @@ name = "nvidia-nccl-cu12"
 version = "2.30.4"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch'",
-    "sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra == 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra != 'extra-8-protenij-torch'",
-    "sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra != 'extra-8-protenij-torch'",
+    "sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra == 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128'",
+    "sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128'",
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/bc/2b/1757b6b74ee241de5efee3f35487dcb33e09c07605254809c6ce36aeb783/nvidia_nccl_cu12-2.30.4-py3-none-manylinux_2_18_aarch64.whl", hash = "sha256:606fa9aa9215c00367d060188eb1a5bbd28396aff5e11b9200d99d1a6ab79a71", size = 300091935, upload-time = "2026-04-23T03:22:58.024Z" },
@@ -987,9 +968,8 @@ name = "nvidia-nvjitlink-cu12"
 version = "12.9.86"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch'",
-    "sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra == 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra != 'extra-8-protenij-torch'",
-    "sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra != 'extra-8-protenij-torch'",
+    "sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra == 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128'",
+    "sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128'",
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/46/0c/c75bbfb967457a0b7670b8ad267bfc4fffdf341c074e0a80db06c24ccfd4/nvidia_nvjitlink_cu12-12.9.86-py3-none-manylinux2010_x86_64.manylinux_2_12_x86_64.whl", hash = "sha256:e3f1171dbdc83c5932a45f0f4c99180a70de9bd2718c1ab77d14104f6d7147f9", size = 39748338, upload-time = "2025-06-05T20:10:25.613Z" },
@@ -1014,12 +994,11 @@ name = "nvidia-nvshmem-cu12"
 version = "3.6.5"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch'",
-    "sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra == 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra != 'extra-8-protenij-torch'",
-    "sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra != 'extra-8-protenij-torch'",
+    "sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra == 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128'",
+    "sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128'",
 ]
 dependencies = [
-    { name = "nvidia-cuda-cccl-cu12", marker = "(sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra == 'extra-8-protenij-pytorch-cpu') or (sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'darwin' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'darwin' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-torch') or (sys_platform == 'emscripten' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'emscripten' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-torch') or (sys_platform == 'win32' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'win32' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-torch') or (sys_platform == 'darwin' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra != 'extra-8-protenij-torch') or (extra != 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch')" },
+    { name = "nvidia-cuda-cccl-cu12", marker = "(sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra == 'extra-8-protenij-pytorch-cpu') or (sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'darwin' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'darwin' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'emscripten' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (sys_platform == 'win32' and extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128')" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/fb/da/bd8ae5201f8c5751ece31fe4fe489ece10fbcf5fcc1a595855b6459b6d6e/nvidia_nvshmem_cu12-3.6.5-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:7b38521ff84cdfc68da3360fe249cfbabfe05ee9aa271458857476124b03a420", size = 153109548, upload-time = "2026-03-24T19:19:19.523Z" },
@@ -1083,7 +1062,7 @@ source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "numpy" },
     { name = "python-dateutil" },
-    { name = "tzdata", marker = "sys_platform == 'emscripten' or sys_platform == 'win32' or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-torch') or (extra == 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch')" },
+    { name = "tzdata", marker = "sys_platform == 'emscripten' or sys_platform == 'win32' or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/da/99/b342345300f13440fe9fe385c3c481e2d9a595ee3bab4d3219247ac94e9a/pandas-3.0.2.tar.gz", hash = "sha256:f4753e73e34c8d83221ba58f232433fca2748be8b18dbca02d242ed153945043", size = 4645855, upload-time = "2026-03-31T06:48:30.816Z" }
 wheels = [
@@ -1167,22 +1146,18 @@ dependencies = [
     { name = "safetensors" },
     { name = "scikit-learn" },
     { name = "scipy" },
-    { name = "setuptools", version = "81.0.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-8-protenij-pytorch-cpu' or extra == 'extra-8-protenij-pytorch-cu128' or extra == 'extra-8-protenij-torch'" },
-    { name = "setuptools", version = "82.0.1", source = { registry = "https://pypi.org/simple" }, marker = "(extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-torch') or (extra == 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch') or (extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra != 'extra-8-protenij-torch')" },
+    { name = "setuptools", version = "81.0.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-8-protenij-pytorch-cpu' or extra == 'extra-8-protenij-pytorch-cu128'" },
+    { name = "setuptools", version = "82.0.1", source = { registry = "https://pypi.org/simple" }, marker = "(extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128')" },
     { name = "tqdm" },
 ]
 
 [package.optional-dependencies]
 pytorch-cpu = [
-    { name = "torch", version = "2.11.0", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(sys_platform == 'darwin' and extra == 'extra-8-protenij-pytorch-cpu') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-torch') or (extra == 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch')" },
-    { name = "torch", version = "2.11.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(sys_platform != 'darwin' and extra == 'extra-8-protenij-pytorch-cpu') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-torch') or (extra == 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch')" },
+    { name = "torch", version = "2.11.0", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(sys_platform == 'darwin' and extra == 'extra-8-protenij-pytorch-cpu') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128')" },
+    { name = "torch", version = "2.11.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(sys_platform != 'darwin' and extra == 'extra-8-protenij-pytorch-cpu') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128')" },
 ]
 pytorch-cu128 = [
     { name = "torch", version = "2.11.0+cu128", source = { registry = "https://download.pytorch.org/whl/cu128" } },
-]
-torch = [
-    { name = "torch", version = "2.11.0", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(sys_platform == 'darwin' and extra == 'extra-8-protenij-torch') or (extra == 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-torch')" },
-    { name = "torch", version = "2.11.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(sys_platform != 'darwin' and extra == 'extra-8-protenij-torch') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-torch') or (extra == 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch')" },
 ]
 
 [package.dev-dependencies]
@@ -1217,10 +1192,9 @@ requires-dist = [
     { name = "setuptools", specifier = ">=80.9.0" },
     { name = "torch", marker = "extra == 'pytorch-cpu'", specifier = ">=2.11.0", index = "https://download.pytorch.org/whl/cpu", conflict = { package = "protenij", extra = "pytorch-cpu" } },
     { name = "torch", marker = "extra == 'pytorch-cu128'", specifier = ">=2.11.0", index = "https://download.pytorch.org/whl/cu128", conflict = { package = "protenij", extra = "pytorch-cu128" } },
-    { name = "torch", marker = "extra == 'torch'", specifier = ">=2.11.0", index = "https://download.pytorch.org/whl/cpu", conflict = { package = "protenij", extra = "torch" } },
     { name = "tqdm", specifier = ">=4.67.1" },
 ]
-provides-extras = ["torch", "pytorch-cpu", "pytorch-cu128"]
+provides-extras = ["pytorch-cpu", "pytorch-cu128"]
 
 [package.metadata.requires-dev]
 dev = [{ name = "pytest", specifier = ">=9.0.3" }]
@@ -1249,7 +1223,7 @@ name = "pytest"
 version = "9.0.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "colorama", marker = "sys_platform == 'win32' or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-torch') or (extra == 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch')" },
+    { name = "colorama", marker = "sys_platform == 'win32' or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128')" },
     { name = "iniconfig" },
     { name = "packaging" },
     { name = "pluggy" },
@@ -1401,17 +1375,13 @@ name = "setuptools"
 version = "81.0.0"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "sys_platform == 'win32' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch'",
-    "sys_platform == 'emscripten' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch'",
-    "sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch'",
-    "sys_platform == 'darwin' and extra != 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch'",
-    "sys_platform == 'win32' and extra != 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128' and extra != 'extra-8-protenij-torch'",
-    "sys_platform == 'emscripten' and extra != 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128' and extra != 'extra-8-protenij-torch'",
-    "sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128' and extra != 'extra-8-protenij-torch'",
-    "sys_platform == 'win32' and extra == 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra != 'extra-8-protenij-torch'",
-    "sys_platform == 'emscripten' and extra == 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra != 'extra-8-protenij-torch'",
-    "sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra == 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra != 'extra-8-protenij-torch'",
-    "sys_platform == 'darwin' and extra == 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128' and extra != 'extra-8-protenij-torch'",
+    "sys_platform == 'win32' and extra != 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128'",
+    "sys_platform == 'emscripten' and extra != 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128'",
+    "sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128'",
+    "sys_platform == 'win32' and extra == 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128'",
+    "sys_platform == 'emscripten' and extra == 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128'",
+    "sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra == 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128'",
+    "sys_platform == 'darwin' and extra == 'extra-8-protenij-pytorch-cpu' and extra != 'extra-8-protenij-pytorch-cu128'",
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/0d/1c/73e719955c59b8e424d015ab450f51c0af856ae46ea2da83eba51cc88de1/setuptools-81.0.0.tar.gz", hash = "sha256:487b53915f52501f0a79ccfd0c02c165ffe06631443a886740b91af4b7a5845a", size = 1198299, upload-time = "2026-02-06T21:10:39.601Z" }
 wheels = [
@@ -1527,7 +1497,7 @@ resolution-markers = [
 ]
 dependencies = [
     { name = "cuda-bindings", marker = "sys_platform == 'linux'" },
-    { name = "cuda-toolkit", extra = ["cublas", "cudart", "cufft", "cufile", "cupti", "curand", "cusolver", "cusparse", "nvjitlink", "nvrtc", "nvtx"], marker = "(sys_platform == 'linux' and extra == 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-torch')" },
+    { name = "cuda-toolkit", extra = ["cublas", "cudart", "cufft", "cufile", "cupti", "curand", "cusolver", "cusparse", "nvjitlink", "nvrtc", "nvtx"], marker = "(sys_platform == 'linux' and extra == 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128')" },
     { name = "filelock" },
     { name = "fsspec" },
     { name = "jinja2" },
@@ -1552,7 +1522,7 @@ name = "tqdm"
 version = "4.67.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "colorama", marker = "sys_platform == 'win32' or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128') or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-torch') or (extra == 'extra-8-protenij-pytorch-cu128' and extra == 'extra-8-protenij-torch')" },
+    { name = "colorama", marker = "sys_platform == 'win32' or (extra == 'extra-8-protenij-pytorch-cpu' and extra == 'extra-8-protenij-pytorch-cu128')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/09/a9/6ba95a270c6f1fbcd8dac228323f2777d886cb206987444e4bce66338dd4/tqdm-4.67.3.tar.gz", hash = "sha256:7d825f03f89244ef73f1d4ce193cb1774a8179fd96f31d7e1dcde62092b960bb", size = 169598, upload-time = "2026-02-03T17:35:53.048Z" }
 wheels = [
