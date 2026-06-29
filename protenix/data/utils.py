@@ -122,12 +122,13 @@ def get_inter_residue_bonds(atom_array: AtomArray) -> np.ndarray:
     """
     if atom_array.bonds is None:
         return []
-    idx_i = atom_array.bonds._bonds[:, 0]
-    idx_j = atom_array.bonds._bonds[:, 1]
+    bond_array = atom_array.bonds.as_array()
+    idx_i = bond_array[:, 0]
+    idx_j = bond_array[:, 1]
     chain_id_diff = atom_array.chain_id[idx_i] != atom_array.chain_id[idx_j]
     res_id_diff = atom_array.res_id[idx_i] != atom_array.res_id[idx_j]
     diff_mask = chain_id_diff | res_id_diff
-    inter_residue_bonds = atom_array.bonds._bonds[diff_mask]
+    inter_residue_bonds = bond_array[diff_mask]
     inter_residue_bonds = inter_residue_bonds[:, :2]  # remove bond type
     return inter_residue_bonds
 
@@ -216,8 +217,9 @@ def get_ligand_polymer_bond_mask(
     # identify polymer by mol_type (protein, rna, dna, ligand)
     polymer_mask = np.isin(atom_array.mol_type, ["protein", "rna", "dna"])
 
-    idx_i = atom_array.bonds._bonds[:, 0]
-    idx_j = atom_array.bonds._bonds[:, 1]
+    bond_array = atom_array.bonds.as_array()
+    idx_i = bond_array[:, 0]
+    idx_j = bond_array[:, 1]
 
     lig_polymer_bond_indices = np.where(
         (lig_mask[idx_i] & polymer_mask[idx_j])
@@ -227,7 +229,7 @@ def get_ligand_polymer_bond_mask(
         # no ligand-polymer bonds
         lig_polymer_bonds = np.empty((0, 3)).astype(int)
     else:
-        lig_polymer_bonds = atom_array.bonds._bonds[
+        lig_polymer_bonds = bond_array[
             lig_polymer_bond_indices
         ]  # np.array([[atom1, atom2, bond_order]...])
     return lig_polymer_bonds
@@ -680,8 +682,9 @@ def get_lig_lig_bonds(
         lig_mask = atom_array.mol_type == "ligand"
 
     chain_res_id = np.vstack((atom_array.label_asym_id, atom_array.res_id)).T
-    idx_i = atom_array.bonds._bonds[:, 0]
-    idx_j = atom_array.bonds._bonds[:, 1]
+    bond_array = atom_array.bonds.as_array()
+    idx_i = bond_array[:, 0]
+    idx_j = bond_array[:, 1]
 
     ligand_ligand_bond_indices = np.where(
         (lig_mask[idx_i] & lig_mask[idx_j])
@@ -692,7 +695,7 @@ def get_lig_lig_bonds(
         # no ligand-polymer bonds
         lig_polymer_bonds = np.empty((0, 3)).astype(int)
     else:
-        lig_polymer_bonds = atom_array.bonds._bonds[ligand_ligand_bond_indices]
+        lig_polymer_bonds = bond_array[ligand_ligand_bond_indices]
     return lig_polymer_bonds
 
 

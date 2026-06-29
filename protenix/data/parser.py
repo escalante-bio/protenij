@@ -551,11 +551,15 @@ class MMCIFParser:
             conn_bonds = pdbx_convert._parse_inter_residue_bonds(
                 model_atom_site, block["struct_conn"]
             )
-            coord1 = atoms.coord[conn_bonds._bonds[:, 0]]
-            coord2 = atoms.coord[conn_bonds._bonds[:, 1]]
+            conn_bond_array = conn_bonds.as_array()
+            coord1 = atoms.coord[conn_bond_array[:, 0]]
+            coord2 = atoms.coord[conn_bond_array[:, 1]]
             dist = np.linalg.norm(coord1 - coord2, axis=1)
             if bond_lenth_threshold is not None:
-                conn_bonds._bonds = conn_bonds._bonds[dist < bond_lenth_threshold]
+                conn_bonds = struc.BondList(
+                    conn_bonds.get_atom_count(),
+                    conn_bond_array[dist < bond_lenth_threshold],
+                )
             bonds = bonds.merge(conn_bonds)
         atoms.bonds = bonds
 
@@ -925,8 +929,9 @@ class MMCIFParser:
             inter_bonds = ccd._connect_inter_residue(chain, res_starts)
 
             # filter out non-std polymer bonds
-            bond_mask = np.ones(len(inter_bonds._bonds), dtype=bool)
-            for b_idx, (atom_i, atom_j, b_type) in enumerate(inter_bonds._bonds):
+            inter_bond_array = inter_bonds.as_array()
+            bond_mask = np.ones(len(inter_bond_array), dtype=bool)
+            for b_idx, (atom_i, atom_j, b_type) in enumerate(inter_bond_array):
                 idx_i = atom_select(
                     atom_array,
                     {
@@ -965,7 +970,9 @@ class MMCIFParser:
                     # use ref chain bond count if no inter bond in atom_array.
                     central_bond_count[atom_key] = 1
 
-            inter_bonds._bonds = inter_bonds._bonds[bond_mask]
+            inter_bonds = struc.BondList(
+                inter_bonds.get_atom_count(), inter_bond_array[bond_mask]
+            )
             chain.bonds = chain.bonds.merge(inter_bonds)
 
             chain.hetero[:] = False
@@ -2053,22 +2060,21 @@ class AddAtomArrayAnnot(object):
         Returns:
             BondList: Biotite BondList object (copy) with bonds between polymer chains removed
         """
-        copy = atom_array.bonds.copy()
+        bond_array = atom_array.bonds.as_array()
         polymer_mask = np.isin(
             atom_array.label_entity_id, list(entity_poly_type.keys())
         )
-        i = copy._bonds[:, 0]
-        j = copy._bonds[:, 1]
+        i = bond_array[:, 0]
+        j = bond_array[:, 1]
         pp_bond_mask = polymer_mask[i] & polymer_mask[j]
         diff_chain_mask = atom_array.chain_id[i] != atom_array.chain_id[j]
         pp_bond_mask = pp_bond_mask & diff_chain_mask
-        copy._bonds = copy._bonds[~pp_bond_mask]
-
-        # post-process after modified bonds manually
-        # due to the extraction of bonds using a mask, the lower one of the two atom indices is still in the first
-        copy._remove_redundant_bonds()
-        copy._max_bonds_per_atom = copy._get_max_bonds_per_atom()
-        return copy
+        # Rebuilding the BondList via its constructor reproduces the internal
+        # bookkeeping (redundant-bond removal and per-atom max bond count) that
+        # was previously done manually on the private `_bonds` attribute.
+        return struc.BondList(
+            atom_array.bonds.get_atom_count(), bond_array[~pp_bond_mask]
+        )
 
     @staticmethod
     def find_equiv_mol_and_assign_ids(

@@ -132,7 +132,7 @@ def _remove_non_std_ccd_leaving_atoms(atom_array: AtomArray) -> AtomArray:
         AtomArray: biotite AtomArray with leaving atoms removed.
     """
     connected = np.zeros(atom_array.res_id[-1], dtype=bool)
-    for i, j, t in atom_array.bonds._bonds:
+    for i, j, t in atom_array.bonds.as_array():
         if abs(atom_array.res_id[i] - atom_array.res_id[j]) == 1:
             connected[atom_array.res_id[[i, j]].min()] = True
 
@@ -303,7 +303,7 @@ def _build_polymer_atom_array(ccd_seqs: list[str]) -> tuple[AtomArray, struc.Bon
     chain = _add_bonds_to_terminal_residues(chain)
 
     bond_count = {}
-    for i, j, t in polymer_bonds._bonds:
+    for i, j, t in polymer_bonds.as_array():
         bond_count[i] = bond_count.get(i, 0) + 1
         bond_count[j] = bond_count.get(j, 0) + 1
 
