@@ -721,13 +721,14 @@ class Featurizer(object):
 
         # Atoms connected to different residue are fixed.
         # Bonds array: [[atom_idx_i, atom_idx_j, bond_type]]
-        idx_i = self.cropped_atom_array.bonds._bonds[:, 0]
-        idx_j = self.cropped_atom_array.bonds._bonds[:, 1]
+        bond_array = self.cropped_atom_array.bonds.as_array()
+        idx_i = bond_array[:, 0]
+        idx_j = bond_array[:, 1]
         diff_mask = (
             self.cropped_atom_array.ref_space_uid[idx_i]
             != self.cropped_atom_array.ref_space_uid[idx_j]
         )
-        inter_residue_bonds = self.cropped_atom_array.bonds._bonds[diff_mask]
+        inter_residue_bonds = bond_array[diff_mask]
         fixed_atom_mask = np.isin(
             np.arange(len(self.cropped_atom_array)),
             np.unique(inter_residue_bonds[:, :2]),

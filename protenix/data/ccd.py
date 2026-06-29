@@ -393,9 +393,10 @@ def add_inter_residue_bonds(
         atom_array.bonds = inter_bonds
         return atom_array
 
-    select_mask = np.ones(len(inter_bonds._bonds), dtype=bool)
+    inter_bond_array = inter_bonds.as_array()
+    select_mask = np.ones(len(inter_bond_array), dtype=bool)
     if exclude_struct_conn_pairs:
-        for b_idx, (atom_i, atom_j, b_type) in enumerate(inter_bonds._bonds):
+        for b_idx, (atom_i, atom_j, b_type) in enumerate(inter_bond_array):
             atom_k = atom_i if atom_array.atom_name[atom_i] in ("N", "O3'") else atom_j
             bonds, types = atom_array.bonds.get_bonds(atom_k)
             if len(bonds) == 0:
@@ -415,7 +416,7 @@ def add_inter_residue_bonds(
             logging.warning(
                 "label_asym_id not found, far inter chain bonds will not be removed"
             )
-        for b_idx, (atom_i, atom_j, b_type) in enumerate(inter_bonds._bonds):
+        for b_idx, (atom_i, atom_j, b_type) in enumerate(inter_bond_array):
             if atom_array.label_asym_id[atom_i] != atom_array.label_asym_id[atom_j]:
                 coord_i = atom_array.coord[atom_i]
                 coord_j = atom_array.coord[atom_j]
@@ -423,14 +424,19 @@ def add_inter_residue_bonds(
                     select_mask[b_idx] = False
 
     # filter out removed_inter_bonds from atom_array.bonds
-    remove_bonds = inter_bonds._bonds[~select_mask]
-    remove_mask = np.isin(atom_array.bonds._bonds[:, 0], remove_bonds[:, 0]) & np.isin(
-        atom_array.bonds._bonds[:, 1], remove_bonds[:, 1]
+    remove_bonds = inter_bond_array[~select_mask]
+    existing_bond_array = atom_array.bonds.as_array()
+    remove_mask = np.isin(existing_bond_array[:, 0], remove_bonds[:, 0]) & np.isin(
+        existing_bond_array[:, 1], remove_bonds[:, 1]
     )
-    atom_array.bonds._bonds = atom_array.bonds._bonds[~remove_mask]
+    atom_array.bonds = struc.BondList(
+        atom_array.bonds.get_atom_count(), existing_bond_array[~remove_mask]
+    )
 
     # merged normal inter_bonds into atom_array.bonds
-    inter_bonds._bonds = inter_bonds._bonds[select_mask]
+    inter_bonds = struc.BondList(
+        inter_bonds.get_atom_count(), inter_bond_array[select_mask]
+    )
     atom_array.bonds = atom_array.bonds.merge(inter_bonds)
     return atom_array
 
