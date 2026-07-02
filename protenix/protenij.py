@@ -1924,6 +1924,7 @@ def sample_diffusion(
 
     
     
+    @jax.checkpoint
     def body_function(T, in_T):
         x_l, key = T
         c_tau_last, c_tau = in_T
