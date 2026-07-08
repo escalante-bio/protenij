@@ -10,7 +10,7 @@ dependencies = [
     "einops>=0.8.0",
     "equinox>=0.13.0",
     "gemmi>=0.6.5",
-    "jax>=0.6.2",
+    "jax>=0.8.1",
     "ml-collections>=1.1.0",
     "modelcif>=0.7",
     "numpy>=2.1.0",
@@ -26,6 +26,9 @@ dependencies = [
     "setuptools>=80.9.0",
     "tqdm>=4.67.1",
     "huggingface_hub>=0.20.0",
+    "cuequivariance-jax>=0.8.1,<0.9",
+    "cuequivariance-ops-jax-cu12>=0.8.1,<0.9",
+    "jax-triton>=0.3.1",
 ]
 
 [project.optional-dependencies]
