@@ -1,18 +1,18 @@
 """Test loading a Protenix checkpoint and converting to JAX/Equinox."""
 import os
-os.environ["PROTENIX_DATA_ROOT_DIR"] = os.path.expanduser("~/.protenix")
+CACHE_DIR = os.environ.get("PROTENIJ_CACHE_DIR", os.path.expanduser("~/.protenix"))
+os.environ["PROTENIX_DATA_ROOT_DIR"] = CACHE_DIR
 
 import torch
 from ml_collections.config_dict import ConfigDict
 
-from protenix.configs.configs_base import configs as configs_base
-from protenix.configs.configs_data import data_configs
-from protenix.configs.configs_inference import inference_configs
-from protenix.configs.configs_model_type import model_configs
-from protenix.config import parse_configs
+from protenij.configs.configs_base import configs as configs_base
+from protenij.configs.configs_data import data_configs
+from protenij.configs.configs_inference import inference_configs
+from protenij.configs.configs_model_type import model_configs
+from protenij.config import parse_configs
 
 MODEL_NAME = "protenix_base_default_v1.0.0"
-CACHE_DIR = os.path.expanduser("~/.protenix")
 
 # 1. Build configs
 configs_base["use_deepspeed_evo_attention"] = False
@@ -30,7 +30,7 @@ print(f"Pairformer blocks: {configs.model.pairformer.n_blocks}")
 print(f"Diffusion transformer blocks: {configs.model.diffusion_module.transformer.n_blocks}")
 
 # 2. Create PyTorch model
-from protenix.model.protenix import Protenix as TorchProtenix
+from protenij.model.protenix import Protenix as TorchProtenix
 torch_model = TorchProtenix(configs)
 print(f"PyTorch model created")
 n_params = sum(p.numel() for p in torch_model.parameters())
@@ -51,8 +51,8 @@ torch_model.eval()
 print("Checkpoint loaded into PyTorch model")
 
 # 4. Convert to JAX/Equinox
-import protenix.protenij  # registers all from_torch converters
-from protenix.backend import from_torch
+import protenij.protenij  # registers all from_torch converters
+from protenij.backend import from_torch
 
 print("Converting to JAX/Equinox...")
 jax_model = from_torch(torch_model)

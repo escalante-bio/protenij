@@ -1,6 +1,7 @@
 """Translate PyTorch checkpoints to Equinox .eqx + .skeleton.pkl files."""
 import os
-os.environ["PROTENIX_DATA_ROOT_DIR"] = os.path.expanduser("~/.protenix")
+CACHE_DIR = os.environ.get("PROTENIJ_CACHE_DIR", os.path.expanduser("~/.protenix"))
+os.environ["PROTENIX_DATA_ROOT_DIR"] = CACHE_DIR
 
 import time
 import torch
@@ -8,13 +9,11 @@ import jax
 import numpy as np
 from ml_collections.config_dict import ConfigDict
 
-from protenix.configs.configs_base import configs as configs_base
-from protenix.configs.configs_data import data_configs
-from protenix.configs.configs_inference import inference_configs
-from protenix.configs.configs_model_type import model_configs
-from protenix.config import parse_configs
-
-CACHE_DIR = os.path.expanduser("~/.protenix")
+from protenij.configs.configs_base import configs as configs_base
+from protenij.configs.configs_data import data_configs
+from protenij.configs.configs_inference import inference_configs
+from protenij.configs.configs_model_type import model_configs
+from protenij.config import parse_configs
 
 MODELS = [
     "protenix_mini_default_v0.5.0",
@@ -37,7 +36,7 @@ def translate(model_name):
         return
 
     # Build configs (fresh copy each time since configs_base is mutable)
-    from protenix.configs.configs_base import configs as cb
+    from protenij.configs.configs_base import configs as cb
     cfg = {**cb, **{"data": data_configs}, **inference_configs}
     cfg["use_deepspeed_evo_attention"] = False
     cfg = parse_configs(configs=cfg, fill_required_with_null=True)
@@ -46,7 +45,7 @@ def translate(model_name):
     cfg.update(ConfigDict(model_configs[model_name]))
 
     # PyTorch model
-    from protenix.model.protenix import Protenix as TorchProtenix
+    from protenij.model.protenix import Protenix as TorchProtenix
     t0 = time.perf_counter()
     torch_model = TorchProtenix(cfg)
     t1 = time.perf_counter()
@@ -60,8 +59,8 @@ def translate(model_name):
     t2 = time.perf_counter()
 
     # Convert to JAX
-    import protenix.protenij
-    from protenix.backend import from_torch, save_model
+    import protenij.protenij
+    from protenij.backend import from_torch, save_model
     jax_model = from_torch(torch_model)
     t3 = time.perf_counter()
 
@@ -70,7 +69,7 @@ def translate(model_name):
     t4 = time.perf_counter()
 
     # Verify round-trip
-    from protenix.backend import load_model
+    from protenij.backend import load_model
     jax_model2 = load_model(eqx_path)
     leaves_a = jax.tree.leaves(jax_model)
     leaves_b = jax.tree.leaves(jax_model2)

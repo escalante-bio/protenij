@@ -12,7 +12,7 @@ PyTorch is an **optional** dependency. The full inference pipeline (featurizatio
 uv sync
 
 # With PyTorch (needed for converting checkpoints from the original Protenix format)
-uv sync --extra torch
+uv sync --extra pytorch-cpu
 ```
 
 ## Serialized models
@@ -31,7 +31,7 @@ Pre-converted Equinox models skip the PyTorch dependency entirely and load in un
 Models are hosted on [HuggingFace](https://huggingface.co/nickrb/protenij) and downloaded automatically on first use.
 
 ```python
-from protenix.backend import load_model
+from protenij.backend import load_model
 
 # Downloads from HuggingFace, caches to ~/.protenix/
 model = load_model("protenix_base_default_v1.0.0")
@@ -42,10 +42,10 @@ model = load_model("~/.protenix/protenix_base_default_v1.0.0")
 
 ### Translating from a PyTorch checkpoint
 
-Requires the `torch` extra.
+Requires the `pytorch-cpu` extra.
 
 ```bash
-uv sync --extra torch
+uv sync --extra pytorch-cpu
 python translate_models.py
 ```
 

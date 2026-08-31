@@ -1,9 +1,9 @@
 [project]
-name = "protenix"
+name = "protenij"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = "==3.12"
+requires-python = "==3.12.*"
 dependencies = [
     "biopython>=1.83",
     "biotite>=1.2.0",
@@ -28,27 +28,48 @@ dependencies = [
     "huggingface_hub>=0.20.0",
 ]
 
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project.optional-dependencies]
-torch = ["torch[cpu]>=2.3.1"]
+pytorch-cpu = [
+  "torch>=2.11.0",
+]
+pytorch-cu128 = [
+  "torch>=2.11.0",
+]
 
 [tool.uv]
 package = true
 override-dependencies = ["nvidia-cudnn-cu12>=9.8"]
+conflicts = [
+  [
+    { extra = "pytorch-cpu" },
+    { extra = "pytorch-cu128" },
+  ],
+]
 
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+]
+jax-cuda = [
+  "jax[cuda]",
+]
 
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+[tool.uv.sources]
+torch = [
+  { index = "pytorch-cpu", extra = "pytorch-cpu" },
+  { index = "pytorch-cu128", extra = "pytorch-cu128" },
+]
 
 [[tool.uv.index]]
 name = "pytorch-cpu"
 url = "https://download.pytorch.org/whl/cpu"
 explicit = true
 
-[tool.uv.sources]
-torch = [
-  { index = "pytorch-cpu" },
-]
-torchaudio = [
-  { index = "pytorch-cpu" },
-]
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true

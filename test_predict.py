@@ -1,6 +1,7 @@
 """Featurize a short protein, run JAX inference with the tiny model, and save PDB files."""
 import os
-os.environ["PROTENIX_DATA_ROOT_DIR"] = os.path.expanduser("~/.protenix")
+CACHE_DIR = os.environ.get("PROTENIJ_CACHE_DIR", os.path.expanduser("~/.protenix"))
+os.environ["PROTENIX_DATA_ROOT_DIR"] = CACHE_DIR
 
 import copy
 import json
@@ -12,18 +13,17 @@ import jax
 import jax.numpy as jnp
 from ml_collections.config_dict import ConfigDict
 
-from protenix.configs.configs_base import configs as configs_base
-from protenix.configs.configs_data import data_configs
-from protenix.configs.configs_inference import inference_configs
-from protenix.configs.configs_model_type import model_configs
-from protenix.config import parse_configs
+from protenij.configs.configs_base import configs as configs_base
+from protenij.configs.configs_data import data_configs
+from protenij.configs.configs_inference import inference_configs
+from protenij.configs.configs_model_type import model_configs
+from protenij.config import parse_configs
 
 
 
 # ── 1. Config + Model Loading ──────────────────────────────────────────────────
 
 MODEL_NAME = "protenix_base_default_v1.0.0"
-CACHE_DIR = os.path.expanduser("~/.protenix")
 OUTPUT_DIR = "./output_test_predict"
 
 configs_base["use_deepspeed_evo_attention"] = False
@@ -44,7 +44,7 @@ print(f"Pairformer blocks: {configs.model.pairformer.n_blocks}")
 
 # Load JAX/Equinox model from serialized checkpoint
 import equinox as eqx
-from protenix.backend import load_model
+from protenij.backend import load_model
 
 eqx_path = os.path.join(CACHE_DIR, f"{MODEL_NAME}")
 print(f"Loading JAX model from {eqx_path}...")
@@ -59,12 +59,12 @@ print("JAX model ready")
 
 # ── 2. Featurize with real MSA (following mosaic pattern) ──────────────────────
 
-from protenix.data.json_to_feature import SampleDictToFeatures
-from protenix.data.data_pipeline import DataPipeline
-from protenix.data.msa_featurizer import InferenceMSAFeaturizer
-from protenix.data.utils import make_dummy_feature, data_type_transform
-from protenix.utils.torch_utils import dict_to_numpy
-from protenix.runner import msa_search
+from protenij.data.json_to_feature import SampleDictToFeatures
+from protenij.data.data_pipeline import DataPipeline
+from protenij.data.msa_featurizer import InferenceMSAFeaturizer
+from protenij.data.utils import make_dummy_feature, data_type_transform
+from protenij.utils.torch_utils import dict_to_numpy
+from protenij.runner import msa_search
 
 sample = {
     "name": "test_b2m",
@@ -125,7 +125,7 @@ features_dict = make_dummy_feature(features_dict, dummy_feats=dummy_feats)
 features_dict = data_type_transform(features_dict)
 
 # Compute template features from PDB structure
-from protenix.data.template import load_templates_from_pdb
+from protenij.data.template import load_templates_from_pdb
 
 TEMPLATE_PDB = os.path.join(OUTPUT_DIR, "3bik.pdb")
 TEMPLATE_CHAIN = "A"
