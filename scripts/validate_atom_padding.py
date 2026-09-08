@@ -41,11 +41,28 @@ def trunk_embeddings(model, features, cycles, key):
     return initial, trunk
 
 
+def comparison_arrays(output):
+    """Select real atoms inside the host-side comparison/export boundary."""
+    confidence = output.confidence_metrics
+    atom_values = [
+        np.asarray(output.coordinates),
+        np.asarray(confidence.plddt_logits),
+        np.asarray(confidence.resolved_logits),
+    ]
+    if output.atom_pad_mask is not None:
+        mask = np.asarray(output.atom_pad_mask)
+        if mask.dtype != np.bool_ or mask.shape != (atom_values[0].shape[-2],):
+            raise ValueError("Compare each sequence separately with its atom mask")
+        atom_values = [value[..., mask, :] for value in atom_values]
+    return (*atom_values, confidence.pae_logits, confidence.pde_logits,
+            output.distogram_logits)
+
+
 def compare_outputs(native, padded, features):
     """Geometry after removing absent atom rows; one result per independent key."""
     n = features["atom_to_token_idx"].shape[0]
-    a = np.asarray(native.coordinates).reshape(-1, n, 3)
-    b = np.asarray(padded.coordinates).reshape(-1, n, 3)
+    a = comparison_arrays(native)[0].reshape(-1, n, 3)
+    b = comparison_arrays(padded)[0].reshape(-1, n, 3)
     geometry = []
     for ref, test in zip(a, b, strict=True):
         ref_centered = ref - ref.mean(0)
@@ -254,7 +271,6 @@ def main():
             if args.diagnose_centering:
                 diagnosis = diagnose(model, f, initial_out, trunk_out, ni)
                 diagnostics.append(tuple(np.asarray(x)[..., :n, :] for x in diagnosis))
-            native_output = output.unpad()
             if label == "padded":
                 for name, values in (
                     ("coordinates", output.coordinates),
@@ -267,12 +283,14 @@ def main():
             if args.coordinates_dir is not None:
                 np.savez_compressed(
                     args.coordinates_dir / f"fixture{index}-{label}.npz",
-                    coordinates=np.asarray(native_output.coordinates),
+                    coordinates=comparison_arrays(output)[0],
                     sample_keys=np.asarray(jax.random.key_data(keys)),
                 )
-            outputs.append(jax.device_get((initial_out, trunk_out, native_output)))
-        native_leaves = jax.tree.leaves(outputs[0])
-        padded_leaves = jax.tree.leaves(outputs[1])
+            outputs.append(jax.device_get((initial_out, trunk_out, output)))
+        native_leaves, padded_leaves = [
+            jax.tree.leaves((initial, trunk, comparison_arrays(output)))
+            for initial, trunk, output in outputs
+        ]
         differences = []
         parity_passed = True
         for a, b in zip(native_leaves, padded_leaves, strict=True):

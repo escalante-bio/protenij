@@ -2237,10 +2237,10 @@ class TrunkEmbedding(eqx.Module):
     z: Float[Array, "... N_token N_token c_z"]
 
 class ConfidenceMetrics(eqx.Module):
-    plddt_logits: Float[Array, "... N_sample N_token 50"]
+    plddt_logits: Float[Array, "... N_sample N_atom 50"]
     pae_logits: Float[Array, "... N_sample N_token N_token 64"]
     pde_logits: Float[Array, "... N_sample N_token N_token 64"]
-    resolved_logits: Float[Array, "... N_sample N_token 2"]
+    resolved_logits: Float[Array, "... N_sample N_atom 2"]
 
 
 class Outputs(eqx.Module):
@@ -2249,29 +2249,29 @@ class Outputs(eqx.Module):
     distogram_logits: Float[Array, "... N_sample N_token N_token 64"]
     atom_pad_mask: Bool[Array, "N_atom"] | None = None
 
-    def unpad(self):
-        """Remove absent atom rows on the host, before structure export/scoring.
+    def to_atom_arrays(self, atom_array):
+        """Build one native Biotite AtomArray per sample, applying the presence mask.
 
-        Intentionally outside JIT: output lengths differ by native atom count.
-        Token-level confidence and distograms are unchanged.
+        Call on the host for one sequence at a time. The model output retains
+        its fixed atom dimension for JIT and batching.
         """
-        if self.atom_pad_mask is None:
-            return self
-        mask = np.asarray(self.atom_pad_mask)
-        if mask.ndim != 1:
-            raise ValueError("Unpad each sequence separately after sequence vmap")
-        indices = np.flatnonzero(mask)
-        confidence = self.confidence_metrics
-        return Outputs(
-            coordinates=jnp.take(self.coordinates, indices, axis=-2),
-            confidence_metrics=ConfidenceMetrics(
-                plddt_logits=jnp.take(confidence.plddt_logits, indices, axis=-2),
-                pae_logits=confidence.pae_logits,
-                pde_logits=confidence.pde_logits,
-                resolved_logits=jnp.take(confidence.resolved_logits, indices, axis=-2),
-            ),
-            distogram_logits=self.distogram_logits,
-        )
+        coordinates = np.asarray(self.coordinates)
+        if coordinates.ndim != 3:
+            raise ValueError("Export each sequence separately after sequence vmap")
+        if self.atom_pad_mask is not None:
+            mask = np.asarray(self.atom_pad_mask)
+            if mask.dtype != np.bool_ or mask.shape != (coordinates.shape[-2],):
+                raise ValueError("atom_pad_mask must be a boolean mask for one sequence")
+            coordinates = coordinates[:, mask, :]
+        if coordinates.shape[1:] != (len(atom_array), 3):
+            raise ValueError("Real output atoms must match the original atom array")
+        structures = []
+        for sample in coordinates:
+            structure = atom_array.copy()
+            structure.coord = sample
+            structures.append(structure)
+        return structures
+
 
 class Protenix(eqx.Module):
     input_embedder: InputFeatureEmbedder

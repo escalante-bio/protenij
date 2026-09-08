@@ -1,6 +1,10 @@
 """CPU-sized padding invariance tests; no checkpoints or network needed."""
 
 import unittest
+from io import StringIO
+
+from biotite.structure import AtomArray
+from biotite.structure.io.pdb import PDBFile
 
 import jax
 import jax.numpy as jnp
@@ -164,25 +168,63 @@ class AtomPaddingTests(unittest.TestCase):
         # Explicit tensors versus RNG inside scan can fuse slightly differently.
         assert_allclose(actual, expected, atol=1e-7, rtol=1e-5)
 
-    def test_outputs_exclude_padding_but_keep_token_confidence(self):
+    def test_export_and_comparison_exclude_padding(self):
+        from scripts.validate_atom_padding import comparison_arrays, compare_outputs
+
+        atoms = AtomArray(3)
+        atoms.coord[:] = 0
+        atoms.chain_id[:] = "A"
+        atoms.res_id[:] = 1
+        atoms.res_name[:] = "ALA"
+        atoms.atom_name[:] = ["N", "CA", "C"]
+        atoms.element[:] = ["N", "C", "C"]
+        coordinates = np.arange(18, dtype=np.float32).reshape(2, 3, 3)
         metrics = ConfidenceMetrics(
-            jnp.ones((2, 8, 50)),
-            jnp.ones((2, 3, 3, 64)),
-            jnp.ones((2, 3, 3, 64)),
-            jnp.ones((2, 8, 2)),
+            jnp.ones((2, 3, 50)), jnp.ones((2, 3, 3, 64)),
+            jnp.ones((2, 3, 3, 64)), jnp.ones((2, 3, 2)),
         )
-        output = Outputs(
-            jnp.ones((2, 8, 3)), metrics, jnp.ones((3, 3, 64)), jnp.arange(8) < 5
+        native = Outputs(jnp.asarray(coordinates), metrics, jnp.ones((3, 3, 64)))
+        # Interspersed absent rows catch accidental prefix slicing; NaNs must
+        # never enter exported structures or numerical comparisons.
+        mask = np.array([True, False, True, False, True])
+        def pad(values):
+            result = np.full((*values.shape[:-2], 5, values.shape[-1]), np.nan)
+            result[..., mask, :] = values
+            return jnp.asarray(result)
+        padded = Outputs(
+            pad(native.coordinates),
+            ConfidenceMetrics(pad(metrics.plddt_logits), metrics.pae_logits,
+                              metrics.pde_logits, pad(metrics.resolved_logits)),
+            native.distogram_logits, jnp.asarray(mask),
         )
-        native = output.unpad()
-        self.assertEqual(native.coordinates.shape, (2, 5, 3))
-        self.assertEqual(native.confidence_metrics.plddt_logits.shape, (2, 5, 50))
-        self.assertEqual(native.confidence_metrics.resolved_logits.shape, (2, 5, 2))
-        self.assertIs(native.confidence_metrics.pae_logits, metrics.pae_logits)
-        self.assertIs(native.confidence_metrics.pde_logits, metrics.pde_logits)
-        self.assertIs(native.distogram_logits, output.distogram_logits)
-        self.assertIsNone(native.atom_pad_mask)
-        self.assertIs(native.unpad(), native)
+        for output in (native, padded):
+            structures = output.to_atom_arrays(atoms)
+            self.assertEqual(len(structures), 2)
+            for i, structure in enumerate(structures):
+                assert_array_equal(structure.coord, coordinates[i])
+                assert_array_equal(structure.atom_name, atoms.atom_name)
+                pdb = PDBFile()
+                pdb.set_structure(structure)
+                buffer = StringIO()
+                pdb.write(buffer)
+                buffer.seek(0)
+                restored = PDBFile.read(buffer).get_structure(model=1)
+                assert_array_equal(restored.coord, coordinates[i])
+            for actual, expected in zip(comparison_arrays(output), comparison_arrays(native)):
+                assert_array_equal(actual, expected)
+        assert_array_equal(atoms.coord, 0)  # Export does not mutate metadata input.
+        self.assertEqual(padded.coordinates.shape, (2, 5, 3))
+        report = compare_outputs(native, padded, {"atom_to_token_idx": np.arange(3)})
+        self.assertTrue(all(item["all_atom_rmsd"] == 0 for item in report["geometry"]))
+        with self.assertRaisesRegex(ValueError, "original atom array"):
+            padded.to_atom_arrays(AtomArray(2))
+        malformed = Outputs(padded.coordinates, padded.confidence_metrics,
+                            padded.distogram_logits, jnp.ones(4, dtype=bool))
+        with self.assertRaisesRegex(ValueError, "boolean mask for one sequence"):
+            malformed.to_atom_arrays(atoms)
+        batched = jax.tree.map(lambda x: jnp.stack([x, x]), padded)
+        with self.assertRaisesRegex(ValueError, "each sequence separately"):
+            batched.to_atom_arrays(atoms)
 
     def test_one_jit_trace_across_native_atom_counts(self):
         traces = []

@@ -62,9 +62,9 @@ from protenix.atom_padding import pad_atom_features
 padded = pad_atom_features(features, padding_multiple=256)  # Or atom_count=4352.
 output = model(input_feature_dict=padded, N_cycle=10, N_sample=2,
                N_steps=200, key=key)
-output = output.unpad()  # On the host, before scoring or export; per sequence if batched.
 ```
 
-`atom_pad_mask` marks real atoms. Custom atom fields require `extra_atom_axes`;
+`atom_pad_mask` marks real atoms; `output.to_atom_arrays(atom_array)` handles it
+when exporting structures. Custom atom fields require `extra_atom_axes`;
 token, MSA and template dimensions are not padded. Identical seeds do not imply
 identical samples across padding sizes.
