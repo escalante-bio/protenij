@@ -5,7 +5,7 @@ import jax.numpy as jnp
 import equinox as eqx
 import numpy as np
 import math
-from .atom_padding import mask_atom_values, center_atom_coordinates
+from .atom_padding import mask_atom_features, mask_atom_values, center_atom_coordinates
 
 
 import einops
@@ -108,28 +108,6 @@ def reshape_at_dim(x, dim: int, target_shape):
     return x.reshape(target_shape)
 
 
-def optimized_concat_split(attn_bias, n_queries: int):
-    """Optimized concatenation and splitting of attention bias tensor.
-
-    Args:
-        attn_bias (torch.Tensor): The attention bias tensor.
-            Shape: [..., D, E]
-        n_queries (int): The number of queries in each split.
-
-    Returns:
-        torch.Tensor: The reshaped and permuted attention bias tensor.
-            Shape: [..., n_queries, D // n_queries * E]
-    """
-    D = attn_bias.shape[-2]
-    E = attn_bias.shape[-1]
-    assert D % n_queries == 0
-    num_splits = D // n_queries
-    reshaped = attn_bias.reshape(*attn_bias.shape[:-2], num_splits, n_queries, E)
-    permuted = jnp.transpose(reshaped, (*range(reshaped.ndim - 3), -2, -3, -1))
-    output = permuted.reshape(*attn_bias.shape[:-2], n_queries, num_splits * E)
-    return output
-
-
 def rearrange_qk_to_dense_trunk(
     q,
     k,
@@ -189,33 +167,10 @@ def rearrange_qk_to_dense_trunk(
         move_final_dim_to_dim(k_trunked[i], dim=dim_k[i] + 1) for i in range(num_k)
     ]
 
-    if compute_mask:
-        pad_mask = jnp.ones(
-            (
-                *(1,) * len(q[0].shape[:-2]),
-                n + q_pad_length,
-                n + pad_left + pad_right,
-            )
-        )
-        pad_mask = (
-            pad_mask.at[..., :n, 0:pad_left]
-            .set(0)
-            .at[..., :n, pad_left + n : :]
-            .set(0)
-            .at[..., n::, :]
-            .set(0)
-        )
-
-        concat_split_data = optimized_concat_split(pad_mask, n_queries)
-        pad_mask_trunked = (
-            jnp.swapaxes(
-                unfold(concat_split_data, -1, n_keys, pad_mask.shape[-1] + n_queries),
-                -2,
-                -3,
-            )
-        ).astype(bool)
-    else:
-        pad_mask_trunked = None
+    pad_mask_trunked = (
+        local_atom_pair_mask(jnp.ones(n, dtype=bool), n_queries, n_keys)
+        if compute_mask else None
+    )
 
     if not q_is_list:
         q_trunked = q_trunked[0]
@@ -230,6 +185,18 @@ def rearrange_qk_to_dense_trunk(
     }
 
     return q_trunked, k_trunked, padding_info
+
+
+def local_atom_pair_mask(atom_mask, n_queries, n_keys):
+    """Window one presence mask, including implicit padding at both ends.
+
+    Only local [windows, queries, keys] pairs are materialized.
+    """
+    mask_q, mask_k, _ = rearrange_qk_to_dense_trunk(
+        atom_mask, atom_mask, dim_q=-1, dim_k=-1,
+        n_queries=n_queries, n_keys=n_keys, compute_mask=False,
+    )
+    return mask_q[..., None] & mask_k[..., None, :]
 
 
 class Transition(AbstractFromTorch):
@@ -493,160 +460,38 @@ class ProtenixAttention(AbstractFromTorch):
     
 
     @staticmethod
-    def rearrange_to_dense_trunk(
-        q,
-        k,
-        v,
-        n_queries: int,
-        n_keys: int,
-        attn_bias=None,
-        inf: float = 1e10,
-    ):
-        assert n_keys >= n_queries
-        assert n_queries & 0x01 == 0
-        assert n_keys & 0x01 == 0
-
-        n, d = q.shape[-2:]
-
-        q_trunked, kv_trunked, padding_info = (
-            rearrange_qk_to_dense_trunk(
-                q=q,
-                k=[k, v],
-                dim_q=-2,
-                dim_k=[-2, -2],
-                n_queries=n_queries,
-                n_keys=n_keys,
-                compute_mask=False,
-            )
-        )
-        q_pad_length, pad_left, pad_right = (
-            padding_info["q_pad"],
-            padding_info["k_pad_left"],
-            padding_info["k_pad_right"],
-        )
-
-        # Padded_width = n + pad_left + pad_right
-        if attn_bias is None:
-
-            attn_bias = jnp.zeros(
-                (
-                    *(1,) * len(q.shape[:-2]),
-                    n + q_pad_length,
-                    n + pad_left + pad_right,
-                )
-            )
-            attn_bias = attn_bias.at[..., :n, 0:pad_left].set(-inf)
-            attn_bias = attn_bias.at[..., :n, pad_left + n : :].set(-inf)
-            attn_bias = attn_bias.at[..., n::, :].set(-inf)
-
-        else:
-            assert False
-            # attn_bias = F.pad(
-            #     attn_bias, (pad_left, pad_right, 0, q_pad_length), value=-inf
-            # )
-
-        concat_split_data = optimized_concat_split(attn_bias, n_queries)
-        # attn_bias_trunked = unfold(
-        #     concat_split_data, -1, n_keys, attn_bias.shape[-1] + n_queries
-        # ).transpose(-2, -3)
-        attn_bias_trunked = jnp.swapaxes(
-            unfold(concat_split_data, -1, n_keys, attn_bias.shape[-1] + n_queries),
-            -2,
-            -3,
-        )
-        return (
-            q_trunked,
-            kv_trunked[0],
-            kv_trunked[1],
-            attn_bias_trunked,
-            q_pad_length,
-        )
-
-    @staticmethod
     def _local_attention(
-        *,
-        q,
-        k,
-        v,
-        n_queries: int,
-        n_keys: int,
-        attn_bias=None,
-        trunked_attn_bias=None,
-        inf: float = 1e10,
-        atom_mask=None,
+        *, q, k, v, n_queries: int, n_keys: int,
+        attn_bias=None, trunked_attn_bias=None, atom_mask=None,
     ):
-        assert (
-            q.shape == k.shape == v.shape
-        )  # local attention doesn't make sense if Q != K
-
-        q = mask_atom_values(q, atom_mask)
-        k = mask_atom_values(k, atom_mask)
-        v = mask_atom_values(v, atom_mask)
-
-        # Prepare for attention qkv, q: [..., n_trunks, n_queries, d], kv: [..., n_trunks, n_keys, d]
-
-        # Rerrange to dense trunks
-        # q: [*, n, d] -> [*, n_trunks, n_queries, d]
-        # kv: [*, n, d] -> [*, n_trunks, n_keys, d]
-        # attn_bias: [*, n, d] -> [*, n_trunks, n_queries, n_keys]
-        q_trunked, k_trunked, v_trunked, attn_bias_trunked, q_pad_length = (
-            ProtenixAttention.rearrange_to_dense_trunk(
-                q=q,
-                k=k,
-                v=v,
-                n_queries=n_queries,
-                n_keys=n_keys,
-                attn_bias=attn_bias,
-                inf=inf,
-            )
+        assert q.shape == k.shape == v.shape
+        assert attn_bias is None, "Local attention requires a windowed pair bias"
+        n_atoms = q.shape[-2]
+        # Sanitize before attention: masked softmax weights cannot suppress NaN V.
+        q, k, v = (mask_atom_values(x, atom_mask) for x in (q, k, v))
+        q, (k, v), _ = rearrange_qk_to_dense_trunk(
+            q, [k, v], dim_q=-2, dim_k=[-2, -2],
+            n_queries=n_queries, n_keys=n_keys, compute_mask=False,
         )
+        presence = jnp.ones(n_atoms, dtype=bool) if atom_mask is None else atom_mask
+        # Heads are the batch dimension of each dot_product_attention call.
+        mask = local_atom_pair_mask(presence, n_queries, n_keys)[None, ...]
 
-        # Apply attention
-        # [..., n_trunks, n_queries, d]
-        if trunked_attn_bias is not None:
-            attn_bias_trunked = attn_bias_trunked + trunked_attn_bias
-
-        attention_mask = None
-        if atom_mask is not None:
-            mask_q, mask_k, _ = rearrange_qk_to_dense_trunk(
-                q=atom_mask, k=atom_mask, dim_q=-1, dim_k=-1,
-                n_queries=n_queries, n_keys=n_keys, compute_mask=False,
-            )
-            attention_mask = mask_q[..., None] & mask_k[..., None, :]
-            # Heads are the batch dimension of each dot_product_attention call.
-            attention_mask = attention_mask[None, ...]
-
-        # if we have an extra batch dimension do a vmap...
-        q_size = q_trunked.shape
-        if len(q_size) == 5:
-            attn_bias_trunked = jnp.broadcast_to(
-                attn_bias_trunked, (q_size[0], *attn_bias_trunked.shape[1:])
-            )
-            out = jax.vmap(lambda q,k,v,ab: jax.nn.dot_product_attention(
+        def attend(q, k, v, bias):
+            return jax.nn.dot_product_attention(
                 query=jnp.swapaxes(q, -3, -2),
                 key=jnp.swapaxes(k, -3, -2),
                 value=jnp.swapaxes(v, -3, -2),
-                bias=ab,  # jnp.swapaxes(attn_bias_trunked, -1, 1),
-                mask=attention_mask,
-                scale=1.0,
-            ))(q_trunked, k_trunked, v_trunked, attn_bias_trunked)
-        else:
-            out = jax.nn.dot_product_attention(
-                query=jnp.swapaxes(q_trunked, -3, -2),
-                key=jnp.swapaxes(k_trunked, -3, -2),
-                value=jnp.swapaxes(v_trunked, -3, -2),
-                bias=attn_bias_trunked,  # jnp.swapaxes(attn_bias_trunked, -1, 1),
-                # XXX TODO: do we need a swapaxes here?
-                mask=attention_mask,
-                scale=1.0,
+                bias=bias, mask=mask, scale=1.0,
             )
-        out = jnp.swapaxes(out, -3, -2)
 
-        # Revert back to orignal shape and remove q_pad_length
-        # [..., n_trunks, n_queries, d] ->  [..., n_trunks * n_queries, d] ->  [..., n, d]
-        out = out.reshape(*out.shape[:-3], -1, out.shape[-1])
-        if q_pad_length > 0:
-            out = out[..., :-q_pad_length, :]
+        bias = trunked_attn_bias
+        if q.ndim == 5:  # Extra sample dimension; bias may be shared across samples.
+            if bias is not None:
+                bias = jnp.broadcast_to(bias, (q.shape[0], *bias.shape[-4:]))
+            attend = jax.vmap(attend, in_axes=(0, 0, 0, None if bias is None else 0))
+        out = jnp.swapaxes(attend(q, k, v, bias), -3, -2)
+        out = out.reshape(*out.shape[:-3], -1, out.shape[-1])[..., :n_atoms, :]
         return mask_atom_values(out, atom_mask)
 
     def __call__(
@@ -698,7 +543,6 @@ class ProtenixAttention(AbstractFromTorch):
                 n_keys=n_keys,
                 attn_bias=attn_bias,
                 trunked_attn_bias=trunked_attn_bias,
-                inf=inf,
                 atom_mask=atom_mask,
             )
         else:
@@ -1178,7 +1022,7 @@ class DiffusionTransformerBlock(AbstractFromTorch):
 
         out_a = attn_out + ff_out
 
-        return mask_atom_values(out_a, atom_mask), s, z
+        return out_a, s, z
 
 
 class DiffusionTransformer(eqx.Module):
@@ -1227,7 +1071,7 @@ class AtomTransformer(AbstractFromTorch):
         n_blocks, n_queries, n_keys = p.shape[-4:-1]
         assert n_queries == self.n_queries
         assert n_keys == self.n_keys
-        return self.diffusion_transformer(
+        out = self.diffusion_transformer(
             a=q,
             s=c,
             z=p,
@@ -1235,6 +1079,9 @@ class AtomTransformer(AbstractFromTorch):
             n_keys=self.n_keys,
             atom_mask=atom_mask,
         )
+        # Blocks keep padded rows finite; only attention mixes atoms. Clear the
+        # residual/transition activations once at the atom-transformer boundary.
+        return mask_atom_values(out, atom_mask)
 
 
 def average_over_atoms(
@@ -1249,7 +1096,7 @@ def average_over_atoms(
         assert atom_to_token_idx.ndim == 1
         n_atoms = x_atom.shape[0]
         weights = jnp.ones(n_atoms) if atom_mask is None else atom_mask.astype(jnp.float32)
-        indices = atom_to_token_idx if atom_mask is None else jnp.where(atom_mask, atom_to_token_idx, 0)
+        indices = mask_atom_values(atom_to_token_idx, atom_mask, axis=0)
         x_atom = mask_atom_values(x_atom, atom_mask)
         d = x_atom.shape[1]
 
@@ -1387,15 +1234,11 @@ class AtomAttentionEncoder(eqx.Module):
             assert z is not None
 
         atom_mask = input_feature_dict.get("atom_pad_mask")
-        if atom_mask is not None:
-            input_feature_dict = dict(input_feature_dict)
-            for name in sorted(set(self.input_feature_keys_ordered) | {
-                "ref_pos", "ref_charge", "ref_mask", "ref_space_uid", "atom_to_token_idx"
-            }):
-                value = input_feature_dict[name]
-                mask = atom_mask.reshape((atom_mask.shape[0],) + (1,) * (value.ndim - 1))
-                input_feature_dict[name] = jnp.where(mask, value, 0)
-            r_l = mask_atom_values(r_l, atom_mask) if r_l is not None else None
+        input_feature_dict = mask_atom_features(input_feature_dict, (
+            *self.input_feature_keys_ordered,
+            "ref_pos", "ref_charge", "ref_mask", "ref_space_uid", "atom_to_token_idx",
+        ))
+        r_l = mask_atom_values(r_l, atom_mask) if r_l is not None else None
         atom_to_token_idx = input_feature_dict["atom_to_token_idx"]
         # Create the atom single conditioning: Embed per-atom meta data
         # [..., N_atom, C_atom]
@@ -1781,9 +1624,9 @@ class AtomAttentionDecoder(AbstractFromTorch):
         p_skip,
     ):
         atom_mask = input_feature_dict.get("atom_pad_mask")
-        indices = input_feature_dict["atom_to_token_idx"]
-        if atom_mask is not None:
-            indices = jnp.where(atom_mask, indices, 0)
+        indices = mask_atom_values(
+            input_feature_dict["atom_to_token_idx"], atom_mask, axis=0
+        )
         # Broadcast per-token activiations to per-atom activations and add the skip connection
         q = (
             broadcast_token_to_atom(
@@ -2189,16 +2032,12 @@ class ConfidenceHead(AbstractFromTorch):
                 pair_mask=pair_mask,
                 key=key)
             
-            atom_to_token_idx = input_feature_dict[
-            "atom_to_token_idx"
-            ]  # in range [0, N_token-1] shape: [N_atom]
-            atom_to_tokatom_idx = input_feature_dict[
-                "atom_to_tokatom_idx"
-            ] 
             atom_mask = input_feature_dict.get("atom_pad_mask")
-            if atom_mask is not None:
-                atom_to_token_idx = jnp.where(atom_mask, atom_to_token_idx, 0)
-                atom_to_tokatom_idx = jnp.where(atom_mask, atom_to_tokatom_idx, 0)
+            atom_features = mask_atom_features(
+                input_feature_dict, ("atom_to_token_idx", "atom_to_tokatom_idx")
+            )
+            atom_to_token_idx = atom_features["atom_to_token_idx"]
+            atom_to_tokatom_idx = atom_features["atom_to_tokatom_idx"]
             pae_pred = self.linear_no_bias_pae(self.pae_ln(z_pair))
             pde_pred = self.linear_no_bias_pde(
                 self.pde_ln(z_pair + jnp.swapaxes(z_pair, -2, -3))

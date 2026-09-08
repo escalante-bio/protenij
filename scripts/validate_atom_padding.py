@@ -5,6 +5,9 @@ Run from the repository with its dependencies available, for example:
 
 This is a validation harness, not a replacement prediction pipeline. It uses
 real weights and the public model stages with controlled noise on valid atoms.
+--samples is the diffusion sample count for one prediction, sharing its trunk.
+Repeated padded feature shapes/dtypes must reuse tracing; incompatible fixtures
+are reported separately and do not establish compilation reuse.
 Keep GPU preallocation enabled and set an explicit memory budget if needed.
 Never load feature pickles from an untrusted source.
 """
@@ -22,11 +25,13 @@ import numpy as np
 
 from protenix.atom_padding import (
     ATOM_FEATURE_AXES,
-    center_atom_coordinates,
     pad_atom_features,
 )
 from protenix.backend import load_model
 from protenix.protenij import Outputs, sample_diffusion
+from scripts.atom_padding_diagnostics import (
+    comparison_arrays, compare_outputs, diagnose, diagnostic_differences,
+)
 
 
 def trunk_embeddings(model, features, cycles, key):
@@ -41,47 +46,25 @@ def trunk_embeddings(model, features, cycles, key):
     return initial, trunk
 
 
-def comparison_arrays(output):
-    """Select real atoms inside the host-side comparison/export boundary."""
-    confidence = output.confidence_metrics
-    atom_values = [
-        np.asarray(output.coordinates),
-        np.asarray(confidence.plddt_logits),
-        np.asarray(confidence.resolved_logits),
-    ]
-    if output.atom_pad_mask is not None:
-        mask = np.asarray(output.atom_pad_mask)
-        if mask.dtype != np.bool_ or mask.shape != (atom_values[0].shape[-2],):
-            raise ValueError("Compare each sequence separately with its atom mask")
-        atom_values = [value[..., mask, :] for value in atom_values]
-    return (*atom_values, confidence.pae_logits, confidence.pde_logits,
-            output.distogram_logits)
+def feature_signature(features):
+    """Match the dynamic shapes/dtypes and static leaves used by filter_jit."""
+    leaves, structure = jax.tree.flatten(features)
+    return structure, tuple(
+        (x.shape, str(x.dtype), getattr(x, "weak_type", False))
+        if eqx.is_array(x) else (type(x), x)
+        for x in leaves
+    )
 
 
-def compare_outputs(native, padded, features):
-    """Geometry after removing absent atom rows; one result per independent key."""
-    n = features["atom_to_token_idx"].shape[0]
-    a = comparison_arrays(native)[0].reshape(-1, n, 3)
-    b = comparison_arrays(padded)[0].reshape(-1, n, 3)
-    geometry = []
-    for ref, test in zip(a, b, strict=True):
-        ref_centered = ref - ref.mean(0)
-        test_centered = test - test.mean(0)
-        u, _, vh = np.linalg.svd(test_centered.T @ ref_centered)
-        correction = np.eye(3)
-        correction[-1, -1] = np.linalg.det(u @ vh)
-        fitted = test_centered @ (u @ correction @ vh)
-        delta = ref - test
-        geometry.append(
-            {
-                "all_atom_rmsd": float(np.sqrt(np.mean(np.sum(delta**2, axis=-1)))),
-                "aligned_all_atom_rmsd": float(
-                    np.sqrt(np.mean(np.sum((ref_centered - fitted) ** 2, axis=-1)))
-                ),
-                "max_atom_distance": float(np.sqrt(np.sum(delta**2, axis=-1)).max()),
-            }
-        )
-    return {"geometry": geometry}
+def sampler_noise(key, samples, atoms, steps):
+    shape = (samples, atoms, 3)
+    initial = jax.random.normal(key, shape)
+
+    def add_noise(key, _):
+        key = jax.random.fold_in(key, 1)
+        return key, jax.random.normal(key, shape)
+
+    return initial, jax.lax.scan(add_noise, key, None, length=steps)[1]
 
 
 def main():
@@ -115,7 +98,9 @@ def main():
             features.append(pickle.load(handle))
     traces = []
 
-    def predict_one(model, features, initial_noise, step_noise, key):
+    @eqx.filter_jit
+    def predict(model, features, initial_noise, step_noise, key):
+        traces.append(1)
         initial, trunk = trunk_embeddings(model, features, args.cycles, key)
         coordinates = sample_diffusion(
             denoise_net=model.diffusion_module,
@@ -124,7 +109,7 @@ def main():
             s_trunk=trunk.s,
             z_trunk=trunk.z,
             noise_schedule=model.inference_noise_scheduler(args.steps),
-            N_sample=1,
+            N_sample=args.samples,
             gamma0=model.gamma0,
             gamma_min=model.gamma_min,
             noise_scale_lambda=model.noise_scale_lambda,
@@ -151,41 +136,9 @@ def main():
             ),
         )
 
-    @eqx.filter_jit
-    def predict(model, features, initial_noise, step_noise, keys):
-        traces.append(1)
-        initial, trunk, out = jax.vmap(
-            lambda noise, steps, key: predict_one(model, features, noise, steps, key)
-        )(initial_noise, step_noise, keys)
-        # All independent keys here belong to one sequence, with one presence mask.
-        out = Outputs(
-            out.coordinates,
-            out.confidence_metrics,
-            out.distogram_logits,
-            features.get("atom_pad_mask"),
-        )
-        return initial, trunk, out
-
-    @eqx.filter_jit
-    def diagnose(model, f, initial_embedding, trunk_embedding, noise):
-        def one(initial, trunk, noise):
-            centered = center_atom_coordinates(
-                noise * model.inference_noise_scheduler(args.steps)[0],
-                f.get("atom_pad_mask"),
-            )
-            denoised = model.diffusion_module(
-                x_noisy=noise,
-                t_hat_noise_level=jnp.array([5.0]),
-                input_feature_dict=f,
-                s_inputs=initial.s_inputs,
-                s_trunk=trunk.s,
-                z_trunk=trunk.z,
-            )
-            return centered, denoised
-
-        return jax.vmap(one)(initial_embedding, trunk_embedding, noise)
-
     results = []
+    padded_signatures = set()
+    reuse_checks = 0
     for index, native in enumerate(features):
         padded = pad_atom_features(native, padding_multiple=args.padding_multiple)
         n = native["atom_to_token_idx"].shape[0]
@@ -200,58 +153,47 @@ def main():
                 selection = [slice(None)] * value.ndim
                 selection[axis] = slice(n, None)
                 value[tuple(selection)] = poison
-        keys = jnp.stack(
-            [
-                jax.random.fold_in(
-                    jax.random.fold_in(jax.random.key(args.seed), index), sample
-                )
-                for sample in range(args.samples)
-            ]
-        )
-
-        # Native-shaped draws reproduce each chosen unpadded key's RNG stream.
-        # Copy those same valid values into the padded bucket for parity.
-        def noise_for_key(key, n=n):
-            initial = jax.random.normal(key, (1, n, 3))
-
-            def add_noise(key, _):
-                key = jax.random.fold_in(key, 1)
-                return key, jax.random.normal(key, (1, n, 3))
-
-            return initial, jax.lax.scan(add_noise, key, None, length=args.steps)[1]
-
-        initial, step = jax.vmap(noise_for_key)(keys)
+        key = jax.random.fold_in(jax.random.key(args.seed), index)
+        # Reproduce the public sampler's native-shaped RNG stream, then copy
+        # the same values into the padded bucket for parity.
+        initial, step = sampler_noise(key, args.samples, n, args.steps)
         initial = jnp.pad(
-            initial, ((0, 0), (0, 0), (0, bucket - n), (0, 0)), constant_values=jnp.nan
+            initial, ((0, 0), (0, bucket - n), (0, 0)), constant_values=jnp.nan
         )
         step = jnp.pad(
-            step,
-            ((0, 0), (0, 0), (0, 0), (0, bucket - n), (0, 0)),
+            step, ((0, 0), (0, 0), (0, bucket - n), (0, 0)),
             constant_values=jnp.nan,
         )
         outputs = []
         diagnostics = []
         for label, f, ni, ns in (
-            ("native", native, initial[:, :, :n], step[:, :, :, :n]),
+            ("native", native, initial[:, :n], step[:, :, :n]),
             ("padded", padded, initial, step),
         ):
             f, ni, ns = jax.device_put((f, ni, ns))
-            jax.block_until_ready((f, ni, ns, keys))
+            jax.block_until_ready((f, ni, ns, key))
             trace_count = len(traces)
             start = time.perf_counter()
-            lowered = predict.lower(model, f, ni, ns, keys)
+            lowered = predict.lower(model, f, ni, ns, key)
             lowered_s = time.perf_counter() - start
+            if label == "padded":
+                signature = feature_signature(f)
+                if signature in padded_signatures:
+                    if len(traces) != trace_count:
+                        raise AssertionError("Compatible padded features retraced prediction")
+                    reuse_checks += 1
+                padded_signatures.add(signature)
             start = time.perf_counter()
             compiled = lowered.compile()
             compile_s = time.perf_counter() - start
             start = time.perf_counter()
-            value = compiled(model, f, ni, ns, keys)
+            value = compiled(model, f, ni, ns, key)
             jax.block_until_ready(value)
             execution_s = time.perf_counter() - start
             warm_s = []
             for _ in range(args.warm_runs):
                 start = time.perf_counter()
-                jax.block_until_ready(compiled(model, f, ni, ns, keys))
+                jax.block_until_ready(compiled(model, f, ni, ns, key))
                 warm_s.append(time.perf_counter() - start)
             timing = {
                 "fixture": index,
@@ -262,14 +204,14 @@ def main():
                 "compile_s": compile_s,
                 "first_execution_s": execution_s,
                 "warm_execution_s": warm_s,
-                "sample_keys": np.asarray(jax.random.key_data(keys)).tolist(),
+                "prediction_key": np.asarray(jax.random.key_data(key)).tolist(),
                 "new_traces": len(traces) - trace_count,
             }
             print(json.dumps(timing), flush=True)
             results.append(timing)
             initial_out, trunk_out, output = value
             if args.diagnose_centering:
-                diagnosis = diagnose(model, f, initial_out, trunk_out, ni)
+                diagnosis = diagnose(model, f, initial_out, trunk_out, ni, args.steps)
                 diagnostics.append(tuple(np.asarray(x)[..., :n, :] for x in diagnosis))
             if label == "padded":
                 for name, values in (
@@ -284,7 +226,7 @@ def main():
                 np.savez_compressed(
                     args.coordinates_dir / f"fixture{index}-{label}.npz",
                     coordinates=comparison_arrays(output)[0],
-                    sample_keys=np.asarray(jax.random.key_data(keys)),
+                    prediction_key=np.asarray(jax.random.key_data(key)),
                 )
             outputs.append(jax.device_get((initial_out, trunk_out, output)))
         native_leaves, padded_leaves = [
@@ -316,18 +258,7 @@ def main():
             **compare_outputs(outputs[0][2], outputs[1][2], native),
         }
         if diagnostics:
-            report["diagnostics"] = {}
-            for name, a, b in zip(
-                ("initial_center", "fixed_input_denoiser"),
-                diagnostics[0],
-                diagnostics[1],
-                strict=True,
-            ):
-                difference = a - b
-                report["diagnostics"][name] = {
-                    "max_abs": float(np.max(np.abs(difference))),
-                    "rms": float(np.sqrt(np.mean(difference**2))),
-                }
+            report["diagnostics"] = diagnostic_differences(*diagnostics)
         print(json.dumps(report), flush=True)
         results.append(report)
     with open(args.output, "w") as handle:
@@ -347,6 +278,7 @@ def main():
                 "atol": args.atol,
                 "rtol": args.rtol,
                 "matmul_precision": jax.config.jax_default_matmul_precision,
+                "compilation_reuse_checks": reuse_checks,
                 "results": results,
             },
             handle,

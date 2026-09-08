@@ -79,11 +79,28 @@ def pad_atom_features(
     return result
 
 
-def mask_atom_values(values, atom_mask):
-    """Zero absent rows of [..., atoms, channels], including NaN padding."""
+def mask_atom_values(values, atom_mask, *, axis=-2):
+    """Zero absent atoms before arithmetic/gathers, including NaN padding.
+
+    The mask is one-dimensional; leading sample dimensions broadcast. Feature
+    metadata and integer indices use axis=0, activations default to axis=-2.
+    """
     if atom_mask is None:
         return values
-    return jnp.where(jnp.asarray(atom_mask, dtype=bool)[..., None], values, 0)
+    shape = [1] * values.ndim
+    shape[axis] = atom_mask.shape[0]
+    return jnp.where(jnp.asarray(atom_mask, dtype=bool).reshape(shape), values, 0)
+
+
+def mask_atom_features(features, names):
+    """Sanitize atom metadata at model-stage entry, preserving native inputs."""
+    mask = features.get("atom_pad_mask")
+    if mask is None:
+        return features
+    return features | {
+        name: mask_atom_values(features[name], mask, axis=0)
+        for name in dict.fromkeys(names)
+    }
 
 
 def center_atom_coordinates(coordinates, atom_mask=None):

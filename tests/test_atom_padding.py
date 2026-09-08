@@ -6,12 +6,14 @@ from io import StringIO
 from biotite.structure import AtomArray
 from biotite.structure.io.pdb import PDBFile
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import numpy as np
 from numpy.testing import assert_allclose, assert_array_equal
 
 from protenix.atom_padding import center_atom_coordinates, pad_atom_features
+from protenix.backend import _HAS_TORCH
 from protenix.protenij import (
     ConfidenceMetrics,
     Outputs,
@@ -94,6 +96,92 @@ class AtomPaddingTests(unittest.TestCase):
                 assert_allclose(actual[..., :n, :], expected, atol=2e-6, rtol=2e-6)
                 assert_array_equal(actual[..., n:, :], 0)
 
+    def test_local_attention_matches_explicit_windows_with_pair_bias(self):
+        rng = np.random.default_rng(17)
+        n, samples, heads = 9, 2, 2
+        q, k, v = [jnp.asarray(rng.normal(size=(samples, heads, n, 3)), jnp.float32)
+                   for _ in range(3)]
+        biases = jnp.asarray(rng.normal(size=(samples, heads, 3, 4, 8)), jnp.float32)
+        for bias in (biases, biases[:1]):  # Per-sample and shared learned biases.
+            expected = []
+            for i in range(n):
+                start = (i // 4) * 4 - 2
+                lo, hi = max(0, start), min(n, start + 8)
+                logits = jnp.einsum("...d,...kd->...k", q[..., i, :], k[..., lo:hi, :])
+                logits += bias[..., i // 4, i % 4, lo - start:hi - start]
+                expected.append(jnp.einsum(
+                    "...k,...kd->...d", jax.nn.softmax(logits), v[..., lo:hi, :]
+                ))
+            actual = ProtenixAttention._local_attention(
+                q=q, k=k, v=v, n_queries=4, n_keys=8, trunked_attn_bias=bias,
+            )
+            assert_allclose(actual, jnp.stack(expected, axis=-2), atol=2e-6, rtol=2e-6)
+
+    @unittest.skipUnless(_HAS_TORCH, "Encoder construction requires the torch extra")
+    def test_encoder_padding_samples_sequence_vmap_and_compilation_reuse(self):
+        import torch
+        from protenix.backend import from_torch
+        from protenix.model.modules.transformer import AtomAttentionEncoder
+
+        rng = np.random.default_rng(92)
+        for has_coords in (False, True):
+            with self.subTest(has_coords=has_coords), torch.random.fork_rng(devices=[]):
+                torch.manual_seed(92)
+                source = AtomAttentionEncoder(
+                    has_coords=has_coords, c_token=8, c_atom=8, c_atompair=4,
+                    c_s=8, c_z=4, n_blocks=2, n_heads=2, n_queries=4, n_keys=8,
+                )
+                # Nonzero projections exercise learned pair bias and residuals.
+                with torch.no_grad():
+                    for parameter in source.parameters():
+                        parameter.normal_(0, 0.2)
+                model = from_torch(source)
+                conditioning = {
+                    "s": jnp.asarray(rng.normal(size=(2, 2, 8)), jnp.float32),
+                    "z": jnp.asarray(rng.normal(size=(2, 2, 2, 4)), jnp.float32),
+                } if has_coords else {}
+                traces = []
+
+                @eqx.filter_jit
+                def run(features, noisy):
+                    traces.append(1)
+                    return model(features, r_l=noisy, **conditioning)[:2]
+
+                padded_inputs, expected_batch = [], []
+                for n in (5, 7):
+                    features = {
+                        "atom_to_token_idx": np.arange(n, dtype=np.int32) % 2,
+                        "residue_index": np.arange(2, dtype=np.int32),
+                        "ref_pos": rng.normal(size=(n, 3)).astype(np.float32),
+                        "ref_charge": rng.normal(size=n).astype(np.float32),
+                        "ref_mask": np.ones(n, np.float32),
+                        "ref_space_uid": np.zeros(n, np.int32),
+                        "ref_element": rng.normal(size=(n, 128)).astype(np.float32),
+                        "ref_atom_name_chars": rng.normal(size=(n, 4, 64)).astype(np.float32),
+                    }
+                    noisy = jnp.asarray(rng.normal(size=(2, n, 3)), jnp.float32) if has_coords else None
+                    native = model(features, r_l=noisy, **conditioning)
+                    padded = pad_atom_features(features, atom_count=20)
+                    for name in features.keys() - {"residue_index"}:
+                        padded[name][n:] = np.nan if padded[name].dtype.kind == "f" else 999999
+                    padded_noisy = jnp.pad(
+                        noisy, ((0, 0), (0, 20 - n), (0, 0)), constant_values=jnp.nan
+                    ) if has_coords else None
+                    result = run(padded, padded_noisy)
+                    assert_allclose(result[0], native[0], atol=2e-5, rtol=2e-5)
+                    assert_allclose(result[1][..., :n, :], native[1], atol=2e-5, rtol=2e-5)
+                    assert_array_equal(result[1][..., n:, :], 0)
+                    padded_inputs.append((padded, padded_noisy))
+                    expected_batch.append(result)
+                self.assertEqual(len(traces), 1)
+                batched = jax.tree.map(lambda *xs: jnp.stack(xs), *padded_inputs)
+                actual = eqx.filter_jit(jax.vmap(
+                    lambda f, r: model(f, r_l=r, **conditioning)[:2]
+                ))(*batched)
+                expected = jax.tree.map(lambda *xs: jnp.stack(xs), *expected_batch)
+                for a, b in zip(actual, expected, strict=True):
+                    assert_allclose(a, b, atol=2e-5, rtol=2e-5)
+
     def test_diffusion_controlled_noise_parity(self):
         rng = np.random.default_rng(21)
         n, bucket, samples, steps = 5, 16, 2, 4
@@ -169,7 +257,7 @@ class AtomPaddingTests(unittest.TestCase):
         assert_allclose(actual, expected, atol=1e-7, rtol=1e-5)
 
     def test_export_and_comparison_exclude_padding(self):
-        from scripts.validate_atom_padding import comparison_arrays, compare_outputs
+        from scripts.atom_padding_diagnostics import comparison_arrays, compare_outputs
 
         atoms = AtomArray(3)
         atoms.coord[:] = 0
