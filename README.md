@@ -50,3 +50,21 @@ python translate_models.py
 ```
 
 This downloads any missing checkpoints, converts each model to Equinox, saves `.eqx` + `.skeleton.pkl` to `~/.protenix/`, and verifies a bit-exact round-trip.
+
+## Atom padding (JAX inference)
+
+Pad each unbatched feature dictionary to a common atom count for JIT reuse or
+batching; other feature dimensions must also match.
+
+```python
+from protenix.atom_padding import pad_atom_features
+
+padded = pad_atom_features(features, padding_multiple=256)  # Or atom_count=4352.
+output = model(input_feature_dict=padded, N_cycle=10, N_sample=2,
+               N_steps=200, key=key)
+```
+
+`atom_pad_mask` marks real atoms; `output.to_atom_arrays(atom_array)` handles it
+when exporting structures. Custom atom fields require `extra_atom_axes`;
+token, MSA and template dimensions are not padded. Identical seeds do not imply
+identical samples across padding sizes.
