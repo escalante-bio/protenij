@@ -5,6 +5,7 @@ import jax.numpy as jnp
 import equinox as eqx
 import numpy as np
 import math
+from .atom_padding import mask_atom_values, center_atom_coordinates
 
 
 import einops
@@ -572,10 +573,15 @@ class ProtenixAttention(AbstractFromTorch):
         attn_bias=None,
         trunked_attn_bias=None,
         inf: float = 1e10,
+        atom_mask=None,
     ):
         assert (
             q.shape == k.shape == v.shape
         )  # local attention doesn't make sense if Q != K
+
+        q = mask_atom_values(q, atom_mask)
+        k = mask_atom_values(k, atom_mask)
+        v = mask_atom_values(v, atom_mask)
 
         # Prepare for attention qkv, q: [..., n_trunks, n_queries, d], kv: [..., n_trunks, n_keys, d]
 
@@ -600,14 +606,28 @@ class ProtenixAttention(AbstractFromTorch):
         if trunked_attn_bias is not None:
             attn_bias_trunked = attn_bias_trunked + trunked_attn_bias
 
+        attention_mask = None
+        if atom_mask is not None:
+            mask_q, mask_k, _ = rearrange_qk_to_dense_trunk(
+                q=atom_mask, k=atom_mask, dim_q=-1, dim_k=-1,
+                n_queries=n_queries, n_keys=n_keys, compute_mask=False,
+            )
+            attention_mask = mask_q[..., None] & mask_k[..., None, :]
+            # Heads are the batch dimension of each dot_product_attention call.
+            attention_mask = attention_mask[None, ...]
+
         # if we have an extra batch dimension do a vmap...
         q_size = q_trunked.shape
         if len(q_size) == 5:
+            attn_bias_trunked = jnp.broadcast_to(
+                attn_bias_trunked, (q_size[0], *attn_bias_trunked.shape[1:])
+            )
             out = jax.vmap(lambda q,k,v,ab: jax.nn.dot_product_attention(
                 query=jnp.swapaxes(q, -3, -2),
                 key=jnp.swapaxes(k, -3, -2),
                 value=jnp.swapaxes(v, -3, -2),
                 bias=ab,  # jnp.swapaxes(attn_bias_trunked, -1, 1),
+                mask=attention_mask,
                 scale=1.0,
             ))(q_trunked, k_trunked, v_trunked, attn_bias_trunked)
         else:
@@ -617,6 +637,7 @@ class ProtenixAttention(AbstractFromTorch):
                 value=jnp.swapaxes(v_trunked, -3, -2),
                 bias=attn_bias_trunked,  # jnp.swapaxes(attn_bias_trunked, -1, 1),
                 # XXX TODO: do we need a swapaxes here?
+                mask=attention_mask,
                 scale=1.0,
             )
         out = jnp.swapaxes(out, -3, -2)
@@ -626,9 +647,8 @@ class ProtenixAttention(AbstractFromTorch):
         out = out.reshape(*out.shape[:-3], -1, out.shape[-1])
         if q_pad_length > 0:
             out = out[..., :-q_pad_length, :]
-        return out
+        return mask_atom_values(out, atom_mask)
 
-    # TODO: Add mask? Instead of infs....
     def __call__(
         self,
         q_x: Float[Array, "... Q C_q"],
@@ -638,9 +658,12 @@ class ProtenixAttention(AbstractFromTorch):
         n_queries: int | None = None,
         n_keys: int | None = None,
         inf: float | None = 1e10,
+        atom_mask=None,
     ) -> Float[Array, "... Q C_v"]:
         assert self.local_attention_method == "local_cross_attention"
 
+        q_x = mask_atom_values(q_x, atom_mask)
+        kv_x = mask_atom_values(kv_x, atom_mask)
         q, k, v = self._prep_qkv(q_x=q_x, kv_x=kv_x)
 
         if attn_bias is not None:
@@ -676,6 +699,7 @@ class ProtenixAttention(AbstractFromTorch):
                 attn_bias=attn_bias,
                 trunked_attn_bias=trunked_attn_bias,
                 inf=inf,
+                atom_mask=atom_mask,
             )
         else:
             o = _attention(
@@ -720,6 +744,7 @@ class AttentionPairBias(AbstractFromTorch):
         z,
         n_queries: int = 32,
         n_keys: int = 128,
+        atom_mask=None,
     ):
         assert n_queries == z.shape[-3]
         assert n_keys == z.shape[-2]
@@ -744,6 +769,7 @@ class AttentionPairBias(AbstractFromTorch):
             trunked_attn_bias=bias,
             n_queries=n_queries,
             n_keys=n_keys,
+            atom_mask=atom_mask,
         )
         return q
 
@@ -754,6 +780,7 @@ class AttentionPairBias(AbstractFromTorch):
         z,
         n_queries: int | None = None,
         n_keys: int | None = None,
+        atom_mask=None,
     ):
         if self.has_s:
             a = self.layernorm_a(a=a, s=s)
@@ -776,6 +803,7 @@ class AttentionPairBias(AbstractFromTorch):
                 z,
                 n_queries,
                 n_keys,
+                atom_mask=atom_mask,
             )
         else:
             bias = self.linear_nobias_z(self.layernorm_z(z))
@@ -1131,6 +1159,7 @@ class DiffusionTransformerBlock(AbstractFromTorch):
         z: Float[Array, "... N N C_z"],
         n_queries: int | None = None,
         n_keys: int | None = None,
+        atom_mask=None,
     ) -> tuple[Float[Array, "... N C_a"], Float[Array, "... N N C_z"]]:
         # Apply attention pair bias
         attn_out = a + self.drop_path(
@@ -1140,6 +1169,7 @@ class DiffusionTransformerBlock(AbstractFromTorch):
                 z=z,
                 n_queries=n_queries,
                 n_keys=n_keys,
+                atom_mask=atom_mask,
             )
         )
 
@@ -1148,7 +1178,7 @@ class DiffusionTransformerBlock(AbstractFromTorch):
 
         out_a = attn_out + ff_out
 
-        return out_a, s, z
+        return mask_atom_values(out_a, atom_mask), s, z
 
 
 class DiffusionTransformer(eqx.Module):
@@ -1174,12 +1204,14 @@ class DiffusionTransformer(eqx.Module):
         z: Float[Array, "... N N C_z"],
         n_queries: int | None = None,
         n_keys: int | None = None,
+        atom_mask=None,
     ):
         @jax.checkpoint
         def body_fn(embedding, params):
             a, s, z = embedding
             a, s, z = eqx.combine(self.block_static, params)(
-                a=a, s=s, z=z, n_queries=n_queries, n_keys=n_keys
+                a=a, s=s, z=z, n_queries=n_queries, n_keys=n_keys,
+                atom_mask=atom_mask,
             )
             return (a, s, z), None
 
@@ -1191,7 +1223,7 @@ class AtomTransformer(AbstractFromTorch):
     n_queries: int
     n_keys: int
 
-    def __call__(self, q, c, p):
+    def __call__(self, q, c, p, atom_mask=None):
         n_blocks, n_queries, n_keys = p.shape[-4:-1]
         assert n_queries == self.n_queries
         assert n_keys == self.n_keys
@@ -1201,6 +1233,7 @@ class AtomTransformer(AbstractFromTorch):
             z=p,
             n_queries=self.n_queries,
             n_keys=self.n_keys,
+            atom_mask=atom_mask,
         )
 
 
@@ -1208,12 +1241,16 @@ def average_over_atoms(
     x_atom: Float[Array, "... N_atom D"],
     atom_to_token_idx: Int[Array, "... N_atom"],
     n_res: int,
+    atom_mask=None,
 ):
     
     def _helper(x_atom):
         assert x_atom.ndim == 2
         assert atom_to_token_idx.ndim == 1
         n_atoms = x_atom.shape[0]
+        weights = jnp.ones(n_atoms) if atom_mask is None else atom_mask.astype(jnp.float32)
+        indices = atom_to_token_idx if atom_mask is None else jnp.where(atom_mask, atom_to_token_idx, 0)
+        x_atom = mask_atom_values(x_atom, atom_mask)
         d = x_atom.shape[1]
 
         def body_function(accumulated, T):
@@ -1223,14 +1260,17 @@ def average_over_atoms(
         atoms_per_residue_count = jax.lax.scan(
             body_function,
             init=jnp.zeros((n_res,)),
-            xs=(atom_to_token_idx, jnp.ones(n_atoms)),
+            xs=(indices, weights),
         )[0]
 
         accumulated_sum = jax.lax.scan(
-            body_function, init=jnp.zeros((n_res, d)), xs=(atom_to_token_idx, x_atom)
+            body_function, init=jnp.zeros((n_res, d)), xs=(indices, x_atom)
         )[0]
 
-        return accumulated_sum / atoms_per_residue_count[..., None]
+        denominator = atoms_per_residue_count[..., None]
+        if atom_mask is not None:
+            denominator = jnp.maximum(denominator, 1)
+        return accumulated_sum / denominator
     
     n_batch_dim = len(x_atom.shape) - 2
     f = _helper
@@ -1346,6 +1386,16 @@ class AtomAttentionEncoder(eqx.Module):
             assert s is not None
             assert z is not None
 
+        atom_mask = input_feature_dict.get("atom_pad_mask")
+        if atom_mask is not None:
+            input_feature_dict = dict(input_feature_dict)
+            for name in sorted(set(self.input_feature_keys_ordered) | {
+                "ref_pos", "ref_charge", "ref_mask", "ref_space_uid", "atom_to_token_idx"
+            }):
+                value = input_feature_dict[name]
+                mask = atom_mask.reshape((atom_mask.shape[0],) + (1,) * (value.ndim - 1))
+                input_feature_dict[name] = jnp.where(mask, value, 0)
+            r_l = mask_atom_values(r_l, atom_mask) if r_l is not None else None
         atom_to_token_idx = input_feature_dict["atom_to_token_idx"]
         # Create the atom single conditioning: Embed per-atom meta data
         # [..., N_atom, C_atom]
@@ -1462,13 +1512,14 @@ class AtomAttentionEncoder(eqx.Module):
 
         # Cross attention transformer
 
-        q_l = self.atom_transformer(q_l, c_l, p_lm)  # [..., (N_sample), N_atom, c_atom]
+        q_l = self.atom_transformer(q_l, c_l, p_lm, atom_mask=atom_mask)  # [..., (N_sample), N_atom, c_atom]
 
         # Aggregate per-atom representation to per-token representation
         a = average_over_atoms(
             x_atom=jax.nn.relu(self.linear_no_bias_q(q_l)),
             atom_to_token_idx=atom_to_token_idx,
             n_res=input_feature_dict["residue_index"].shape[-1],
+            atom_mask=atom_mask,
         )
 
 
@@ -1729,20 +1780,24 @@ class AtomAttentionDecoder(AbstractFromTorch):
         c_skip,
         p_skip,
     ):
+        atom_mask = input_feature_dict.get("atom_pad_mask")
+        indices = input_feature_dict["atom_to_token_idx"]
+        if atom_mask is not None:
+            indices = jnp.where(atom_mask, indices, 0)
         # Broadcast per-token activiations to per-atom activations and add the skip connection
         q = (
             broadcast_token_to_atom(
                 x_token=self.linear_no_bias_a(a),  # [..., N_token, c_atom]
-                atom_to_token_idx=input_feature_dict["atom_to_token_idx"],
+                atom_to_token_idx=indices,
             )  # [..., N_atom, c_atom]
             + q_skip
         )
 
         # Cross attention transformer
-        q = self.atom_transformer(q, c_skip, p_skip)
+        q = self.atom_transformer(q, c_skip, p_skip, atom_mask=atom_mask)
 
         # Map to positions update
-        return self.linear_no_bias_out(self.layernorm_q(q))
+        return mask_atom_values(self.linear_no_bias_out(self.layernorm_q(q)), atom_mask)
 
 
 class DiffusionModel(AbstractFromTorch):
@@ -1840,6 +1895,8 @@ class DiffusionModel(AbstractFromTorch):
             Output coordinates after processing through the model.
         """
 
+        atom_mask = input_feature_dict.get("atom_pad_mask")
+        x_noisy = mask_atom_values(x_noisy, atom_mask)
         r_noisy = (
             x_noisy
             / jnp.sqrt(self.sigma_data**2 + t_hat_noise_level**2)[..., None, None]
@@ -1860,7 +1917,7 @@ class DiffusionModel(AbstractFromTorch):
             + t_hat_noise_level[..., None, None] / jnp.sqrt(1 + s_ratio**2) * r_update
         )
 
-        return x_denoised
+        return mask_atom_values(x_denoised, atom_mask)
 
 
 class InferenceNoiseScheduler(eqx.Module):
@@ -1911,24 +1968,38 @@ def sample_diffusion(
     noise_scale_lambda: float = 1.003,
     step_scale_eta: float = 1.5,
     key,
+    initial_noise=None,
+    step_noise=None,
 ):
+    """Sample coordinates; optional standard-normal noise arrays control parity tests.
+
+    initial_noise: [..., N_sample, N_atom, 3].
+    step_noise: [N_steps, ..., N_sample, N_atom, 3].
+    Default key-based generation is unchanged, including on unpadded inputs.
+    """
+    atom_mask = input_feature_dict.get("atom_pad_mask")
     N_atom = input_feature_dict["atom_to_token_idx"].shape[-1]
     batch_shape = s_inputs.shape[:-2]
 
 
     # init noise
     # [..., N_sample, N_atom, 3]
-    x_l = noise_schedule[0] * jax.random.normal(
-        key=key, shape=(*batch_shape, N_sample, N_atom, 3)
-    )
+    shape = (*batch_shape, N_sample, N_atom, 3)
+    if initial_noise is None:
+        initial_noise = jax.random.normal(key=key, shape=shape)
+    elif initial_noise.shape != shape:
+        raise ValueError("initial_noise has the wrong shape")
+    if step_noise is not None and step_noise.shape != (len(noise_schedule) - 1, *shape):
+        raise ValueError("step_noise has the wrong shape")
+    x_l = mask_atom_values(noise_schedule[0] * initial_noise, atom_mask)
 
     
     
     @jax.checkpoint
     def body_function(T, in_T):
         x_l, key = T
-        c_tau_last, c_tau = in_T
-        x_l = x_l - jnp.mean(x_l, axis=-2, keepdims=True)  # Center the coordinates
+        c_tau_last, c_tau, step_index = in_T
+        x_l = center_atom_coordinates(x_l, atom_mask)
 
         # Denoise with a predictor-corrector sampler
         # 1. Add noise to move x_{c_tau_last} to x_{t_hat}
@@ -1937,9 +2008,9 @@ def sample_diffusion(
 
         delta_noise_level = jnp.sqrt(t_hat**2 - c_tau_last**2)
         key = jax.random.fold_in(key, 1)
-        x_noisy = x_l + noise_scale_lambda * delta_noise_level * jax.random.normal(
-            key=key, shape=x_l.shape
-        )
+        noise = (jax.random.normal(key=key, shape=x_l.shape)
+                 if step_noise is None else step_noise[step_index])
+        x_noisy = mask_atom_values(x_l + noise_scale_lambda * delta_noise_level * noise, atom_mask)
 
         # 2. Denoise from x_{t_hat} to x_{c_tau}
         # Euler step only
@@ -1963,12 +2034,12 @@ def sample_diffusion(
             ..., None, None
         ]  # Line 9 of AF3 uses 'x_l_hat' instead, which we believe  is a typo.
         dt = c_tau - t_hat
-        x_l = x_noisy + step_scale_eta * dt[..., None, None] * delta
+        x_l = mask_atom_values(x_noisy + step_scale_eta * dt[..., None, None] * delta, atom_mask)
         return (x_l, key), None
 
     x_l, key = jax.lax.scan(body_function,
         init=(x_l, key),
-        xs=(noise_schedule[:-1], noise_schedule[1:]),
+        xs=(noise_schedule[:-1], noise_schedule[1:], jnp.arange(len(noise_schedule) - 1)),
     )[0]
 
     
@@ -2124,6 +2195,10 @@ class ConfidenceHead(AbstractFromTorch):
             atom_to_tokatom_idx = input_feature_dict[
                 "atom_to_tokatom_idx"
             ] 
+            atom_mask = input_feature_dict.get("atom_pad_mask")
+            if atom_mask is not None:
+                atom_to_token_idx = jnp.where(atom_mask, atom_to_token_idx, 0)
+                atom_to_tokatom_idx = jnp.where(atom_mask, atom_to_tokatom_idx, 0)
             pae_pred = self.linear_no_bias_pae(self.pae_ln(z_pair))
             pde_pred = self.linear_no_bias_pde(
                 self.pde_ln(z_pair + jnp.swapaxes(z_pair, -2, -3))
@@ -2142,7 +2217,8 @@ class ConfidenceHead(AbstractFromTorch):
                 self.resolved_ln(a),
                 self.resolved_weight[atom_to_tokatom_idx],
             )
-            return plddt_pred, pae_pred, pde_pred, resolved_pred
+            return (mask_atom_values(plddt_pred, atom_mask), pae_pred, pde_pred,
+                    mask_atom_values(resolved_pred, atom_mask))
         
         plddt_pred, pae_pred, pde_pred, resolved_pred = jax.vmap(single_structure)(x_pred_rep_coords, jax.random.split(key, N_sample))
 
@@ -2171,6 +2247,31 @@ class Outputs(eqx.Module):
     coordinates: Float[Array, "... N_sample N_atom 3"]
     confidence_metrics: ConfidenceMetrics
     distogram_logits: Float[Array, "... N_sample N_token N_token 64"]
+    atom_pad_mask: Bool[Array, "N_atom"] | None = None
+
+    def unpad(self):
+        """Remove absent atom rows on the host, before structure export/scoring.
+
+        Intentionally outside JIT: output lengths differ by native atom count.
+        Token-level confidence and distograms are unchanged.
+        """
+        if self.atom_pad_mask is None:
+            return self
+        mask = np.asarray(self.atom_pad_mask)
+        if mask.ndim != 1:
+            raise ValueError("Unpad each sequence separately after sequence vmap")
+        indices = np.flatnonzero(mask)
+        confidence = self.confidence_metrics
+        return Outputs(
+            coordinates=jnp.take(self.coordinates, indices, axis=-2),
+            confidence_metrics=ConfidenceMetrics(
+                plddt_logits=jnp.take(confidence.plddt_logits, indices, axis=-2),
+                pae_logits=confidence.pae_logits,
+                pde_logits=confidence.pde_logits,
+                resolved_logits=jnp.take(confidence.resolved_logits, indices, axis=-2),
+            ),
+            distogram_logits=self.distogram_logits,
+        )
 
 class Protenix(eqx.Module):
     input_embedder: InputFeatureEmbedder
@@ -2346,6 +2447,7 @@ class Protenix(eqx.Module):
         )
 
         return Outputs(
+            atom_pad_mask=input_feature_dict.get("atom_pad_mask"),
             coordinates=coordinates,
             confidence_metrics=confidence_metrics,
             distogram_logits=self.distogram_head(trunk_embedding.z),
