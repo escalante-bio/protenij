@@ -53,64 +53,18 @@ This downloads any missing checkpoints, converts each model to Equinox, saves `.
 
 ## Atom padding (JAX inference)
 
-Atom padding is opt-in. It gives complexes with different native atom counts
-identical atom dimensions for JIT reuse or sequence batching, provided their
-other feature dimensions also match. Build native features first, then pad each
-unbatched dictionary before transferring/batching it:
+Pad each unbatched feature dictionary to a common atom count for JIT reuse or
+batching; other feature dimensions must also match.
 
 ```python
 from protenix.atom_padding import pad_atom_features
 
-# Round up to a multiple of 256, or choose an explicit common atom_count.
-padded = pad_atom_features(features, padding_multiple=256)
-# padded = pad_atom_features(features, atom_count=4352)
+padded = pad_atom_features(features, padding_multiple=256)  # Or atom_count=4352.
 output = model(input_feature_dict=padded, N_cycle=10, N_sample=2,
                N_steps=200, key=key)
-output = output.unpad()  # On the host, before atom scoring or structure export.
+output = output.unpad()  # On the host, before scoring or export; per sequence if batched.
 ```
 
-`atom_pad_mask` is True for real atoms, False for padding. It is independent of
-`ref_mask`, which describes reference-conformer availability: a real atom may
-have `ref_mask=0`. Local atom attention excludes padded keys and queries,
-atom-to-token means count only real atoms, and diffusion centers over real atoms
-and zeros absent coordinates. Atom confidence logits at padding rows are zero;
-**zero logits are not confidence scores**. Use the presence mask or `unpad()` to
-exclude those rows before downstream scoring. Token-level PAE/PDE/distograms and
-representative atom indices are unchanged.
-
-Calls without `atom_pad_mask` retain the original behavior and random stream.
-Padding changes the random tensor shape, so the same seed is not a guarantee of
-identical valid-atom noise across buckets. For numerical parity checks,
-`sample_diffusion` accepts optional `initial_noise` and `step_noise` arrays; use
-identical standard-normal values on the real atoms in both runs. This does not
-change the default sampler or introduce a different noise distribution.
-
-The helper covers the native inference atom-feature schema (including both axes
-of `bond_mask`). Extra atom-indexed fields need explicit `extra_atom_axes`;
-training labels and custom nested atom features are not handled automatically.
-Token, MSA and template dimensions are not padded. After vmapping sequences,
-unpad each sequence's output separately. Consumers using the individual model
-stages must carry `features["atom_pad_mask"]` to atom reductions/exports themselves.
-The PyTorch implementation is unchanged.
-
-CPU regression tests require no checkpoint:
-
-```bash
-JAX_PLATFORMS=cpu python -m unittest discover -s tests -v
-```
-
-`scripts/validate_atom_padding.py` compares native/padded inputs with controlled
-noise and reports compilation separately from execution. `--samples` vmaps
-independently keyed full trunk+structure calls. Use `--cycles 10 --steps 200
---samples 2 --warm-runs 0` for full sampling without redundant timing repeats;
-`--diagnose-centering` isolates centering and fixed-input denoising differences.
-
-Full-sampling validation used actual v2 weights and a downstream adapter for ODE
-sampling, folded trunk keys and MSA chunking: two 515-token complexes, ten
-recycles, 200 steps and two independent samples, at default matmul precision on
-H100. The generic harness uses upstream sampler/key settings by default. Padding to 4352 atoms preserved input/trunk embeddings and distograms
-exactly; aligned all-atom RMSDs were 0.0024–0.0044 Å and maximum peptide iPTM/ipSAE
-differences were 1.41e-5/1.15e-5. The second padded input reused the executable
-without retracing (0.00026 s compilation). Strict elementwise 1e-3 checks still
-report coordinate/logit differences; these are numerical comparisons, not a
-claim of bit-exact structure sampling. GPU preallocation remained enabled.
+`atom_pad_mask` marks real atoms. Custom atom fields require `extra_atom_axes`;
+token, MSA and template dimensions are not padded. Identical seeds do not imply
+identical samples across padding sizes.
