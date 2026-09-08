@@ -99,13 +99,18 @@ CPU regression tests require no checkpoint:
 JAX_PLATFORMS=cpu python -m unittest discover -s tests -v
 ```
 
-`scripts/validate_atom_padding.py` runs optional real-checkpoint parity checks on
-trusted local feature pickles and reports lowering, compilation, and warm
-execution separately. It uses a short sampling schedule by default; its output
-is a validation report, not a production design evaluation.
+`scripts/validate_atom_padding.py` compares native/padded inputs with controlled
+noise and reports compilation separately from execution. `--samples` vmaps
+independently keyed full trunk+structure calls. Use `--cycles 10 --steps 200
+--samples 2 --warm-runs 0` for full sampling without redundant timing repeats;
+`--diagnose-centering` isolates centering and fixed-input denoising differences.
 
-Even with controlled noise, changing a reduction extent can introduce small
-floating-point differences. `--diagnose-centering` compares centering and a
-fixed-input denoiser separately; `--atol`/`--rtol` set the reported numerical
-checks. For precision diagnostics, use `JAX_DEFAULT_MATMUL_PRECISION=highest`
-for both variants. This is a test setting, not a change to inference defaults.
+Full-sampling validation used actual v2 weights and a downstream adapter for ODE
+sampling, folded trunk keys and MSA chunking: two 515-token complexes, ten
+recycles, 200 steps and two independent samples, at default matmul precision on
+H100. The generic harness uses upstream sampler/key settings by default. Padding to 4352 atoms preserved input/trunk embeddings and distograms
+exactly; aligned all-atom RMSDs were 0.0024–0.0044 Å and maximum peptide iPTM/ipSAE
+differences were 1.41e-5/1.15e-5. The second padded input reused the executable
+without retracing (0.00026 s compilation). Strict elementwise 1e-3 checks still
+report coordinate/logit differences; these are numerical comparisons, not a
+claim of bit-exact structure sampling. GPU preallocation remained enabled.
