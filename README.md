@@ -103,3 +103,9 @@ JAX_PLATFORMS=cpu python -m unittest discover -s tests -v
 trusted local feature pickles and reports lowering, compilation, and warm
 execution separately. It uses a short sampling schedule by default; its output
 is a validation report, not a production design evaluation.
+
+Even with controlled noise, changing a reduction extent can introduce small
+floating-point differences. `--diagnose-centering` compares centering and a
+fixed-input denoiser separately; `--atol`/`--rtol` set the reported numerical
+checks. For precision diagnostics, use `JAX_DEFAULT_MATMUL_PRECISION=highest`
+for both variants. This is a test setting, not a change to inference defaults.

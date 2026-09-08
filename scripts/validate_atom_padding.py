@@ -16,9 +16,14 @@ import time
 
 import equinox as eqx
 import jax
+import jax.numpy as jnp
 import numpy as np
 
-from protenix.atom_padding import pad_atom_features
+from protenix.atom_padding import (
+    ATOM_FEATURE_AXES,
+    center_atom_coordinates,
+    pad_atom_features,
+)
 from protenix.backend import load_model
 from protenix.protenij import Outputs, sample_diffusion
 
@@ -33,6 +38,7 @@ def main():
     parser.add_argument("--output", default="atom-padding-validation.json")
     parser.add_argument("--atol", type=float, default=1e-3)
     parser.add_argument("--rtol", type=float, default=1e-3)
+    parser.add_argument("--diagnose-centering", action="store_true")
     args = parser.parse_args()
     model = jax.tree.map(
         lambda x: jax.device_put(x) if eqx.is_array(x) else x, load_model(args.model)
@@ -87,11 +93,37 @@ def main():
             ),
         )
 
+    @eqx.filter_jit
+    def diagnose(model, f, initial_embedding, trunk_embedding, noise):
+        centered = center_atom_coordinates(
+            noise * model.inference_noise_scheduler(args.steps)[0],
+            f.get("atom_pad_mask"),
+        )
+        denoised = model.diffusion_module(
+            x_noisy=noise,
+            t_hat_noise_level=jnp.array([5.0]),
+            input_feature_dict=f,
+            s_inputs=initial_embedding.s_inputs,
+            s_trunk=trunk_embedding.s,
+            z_trunk=trunk_embedding.z,
+        )
+        return centered, denoised
+
     results = []
     for index, native in enumerate(features):
         padded = pad_atom_features(native, padding_multiple=args.padding_multiple)
         n = native["atom_to_token_idx"].shape[0]
         bucket = padded["atom_to_token_idx"].shape[0]
+        # Invalid metadata/indices must be harmless, not merely zero by convention.
+        for name, axes in ATOM_FEATURE_AXES.items():
+            if name == "atom_pad_mask" or name not in padded:
+                continue
+            value = padded[name]
+            poison = np.nan if np.issubdtype(value.dtype, np.floating) else 999999
+            for axis in axes:
+                selection = [slice(None)] * value.ndim
+                selection[axis] = slice(n, None)
+                value[tuple(selection)] = poison
         rng = np.random.default_rng(100 + index)
         initial = rng.normal(size=(1, bucket, 3)).astype(np.float32)
         step = rng.normal(size=(args.steps, 1, bucket, 3)).astype(np.float32)
@@ -99,6 +131,7 @@ def main():
         initial[:, n:] = np.nan
         step[:, :, n:] = np.nan
         outputs = []
+        diagnostics = []
         for label, f, ni, ns in (
             ("native", native, initial[:, :n], step[:, :, :n]),
             ("padded", padded, initial, step),
@@ -132,6 +165,9 @@ def main():
             print(json.dumps(timing), flush=True)
             results.append(timing)
             initial_out, trunk_out, output = value
+            if args.diagnose_centering:
+                diagnosis = diagnose(model, f, initial_out, trunk_out, ni)
+                diagnostics.append(tuple(np.asarray(x)[..., :n, :] for x in diagnosis))
             outputs.append(jax.device_get((initial_out, trunk_out, output.unpad())))
         native_leaves = jax.tree.leaves(outputs[0])
         padded_leaves = jax.tree.leaves(outputs[1])
@@ -157,6 +193,19 @@ def main():
             "output_differences": differences,
             "parity_passed": parity_passed,
         }
+        if diagnostics:
+            report["diagnostics"] = {}
+            for name, a, b in zip(
+                ("initial_center", "fixed_input_denoiser"),
+                diagnostics[0],
+                diagnostics[1],
+                strict=True,
+            ):
+                difference = a - b
+                report["diagnostics"][name] = {
+                    "max_abs": float(np.max(np.abs(difference))),
+                    "rms": float(np.sqrt(np.mean(difference**2))),
+                }
         print(json.dumps(report), flush=True)
         results.append(report)
     with open(args.output, "w") as handle:
