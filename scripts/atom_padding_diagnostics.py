@@ -8,7 +8,7 @@ from protenix.atom_padding import center_atom_coordinates
 
 
 def comparison_arrays(output):
-    """Select real atoms inside the host-side comparison/export boundary."""
+    """Select real atoms/tokens at the host-side comparison/export boundary."""
     confidence = output.confidence_metrics
     atom_values = [
         np.asarray(output.coordinates),
@@ -20,8 +20,15 @@ def comparison_arrays(output):
         if mask.dtype != np.bool_ or mask.shape != (atom_values[0].shape[-2],):
             raise ValueError("Compare each sequence separately with its atom mask")
         atom_values = [value[..., mask, :] for value in atom_values]
-    return (*atom_values, confidence.pae_logits, confidence.pde_logits,
-            output.distogram_logits)
+    pair_values = [np.asarray(value) for value in (
+        confidence.pae_logits, confidence.pde_logits, output.distogram_logits
+    )]
+    if output.token_pad_mask is not None:
+        mask = np.asarray(output.token_pad_mask)
+        if mask.dtype != np.bool_ or mask.shape != (pair_values[0].shape[-2],):
+            raise ValueError("Compare each sequence separately with its token mask")
+        pair_values = [value[..., mask, :, :][..., :, mask, :] for value in pair_values]
+    return (*atom_values, *pair_values)
 
 
 def compare_outputs(native, padded, features):

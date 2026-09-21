@@ -6,6 +6,7 @@ import equinox as eqx
 import numpy as np
 import math
 from .atom_padding import mask_atom_features, mask_atom_values, center_atom_coordinates
+from .token_padding import mask_token_features, mask_pair_values, token_pair_mask
 
 
 import einops
@@ -625,7 +626,13 @@ class AttentionPairBias(AbstractFromTorch):
         n_queries: int | None = None,
         n_keys: int | None = None,
         atom_mask=None,
+        token_mask=None,
     ):
+        a = mask_atom_values(a, token_mask)
+        if s is not None:
+            s = mask_atom_values(s, token_mask)
+        if token_mask is not None:
+            z = mask_pair_values(z, token_mask[:, None] & token_mask[None, :])
         if self.has_s:
             a = self.layernorm_a(a=a, s=s)
         else:
@@ -652,6 +659,8 @@ class AttentionPairBias(AbstractFromTorch):
         else:
             bias = self.linear_nobias_z(self.layernorm_z(z))
             bias = einops.rearrange(bias, "... A B C -> ... C A B")
+            if token_mask is not None:
+                bias = jnp.where(token_mask[None, None, :], bias, -1e10)
             a = self.attention(
                 a, kv if self.cross_attention_mode else a, attn_bias=bias
             )
@@ -660,7 +669,7 @@ class AttentionPairBias(AbstractFromTorch):
         if self.has_s:
             a *= jax.nn.sigmoid(self.linear_a_last(s))
 
-        return a
+        return mask_atom_values(a, token_mask)
 
 
 class PairformerBlock(AbstractFromTorch):
@@ -675,6 +684,10 @@ class PairformerBlock(AbstractFromTorch):
     c_s: int
 
     def __call__(self, *, s, z, pair_mask, key):
+        token_mask = None if pair_mask is None else jnp.any(pair_mask, axis=-1)
+        z = mask_pair_values(z, pair_mask)
+        if s is not None:
+            s = mask_atom_values(s, token_mask)
         # TODO: Dropout?!
         z += self.tri_mul_out(
             z,
@@ -701,9 +714,10 @@ class PairformerBlock(AbstractFromTorch):
                 a=s,
                 s=None,
                 z=z,
+                token_mask=token_mask,
             )
             s = s + self.single_transition(s)
-        return s, z
+        return (None if s is None else mask_atom_values(s, token_mask)), mask_pair_values(z, pair_mask)
 
 
 class Pairformer(eqx.Module):
@@ -746,10 +760,10 @@ class OuterProductMean(AbstractFromTorch):
     def __call__(
         self,
         m: Float[Array, "... N_seq N_res C_m"],
-        # mask: Bool[Array, "... N_seq N_res"],
+        token_mask=None,
     ):
-        # if mask is None:
-        mask = jnp.ones(m.shape[:-1])  # , dtype=bool)
+        m = mask_atom_values(m, token_mask)
+        mask = jnp.ones(m.shape[:-1]) if token_mask is None else jnp.broadcast_to(token_mask, m.shape[:-1])
         mask = mask.astype(jnp.float32)
         ln = self.layer_norm(m)
 
@@ -789,17 +803,19 @@ class MSAPairWeightedAveraging(AbstractFromTorch):
     softmax_w: any
     linear_no_bias_out: Linear
 
-    def __call__(self, m, z):
-        m = self.layernorm_m(m)
+    def __call__(self, m, z, token_mask=None):
+        m = self.layernorm_m(mask_atom_values(m, token_mask))
         v = self.linear_no_bias_mv(m)
         v = v.reshape(*v.shape[:-1], self.n_heads, self.c)
         b = self.linear_no_bias_z(self.layernorm_z(z))
+        if token_mask is not None:
+            b = jnp.where(token_mask[None, :, None], b, -1e10)
         w = self.softmax_w(b)
         o = jnp.einsum("...ijh,...sjhc->...sihc", w, v)
         o = o.reshape(*o.shape[:-2], self.n_heads * self.c)
         g = jax.nn.sigmoid(self.linear_no_bias_mg(m))
         m = self.linear_no_bias_out(g * o)
-        return m
+        return mask_atom_values(m, token_mask)
 
 
 class MSAStack(AbstractFromTorch):
@@ -808,10 +824,11 @@ class MSAStack(AbstractFromTorch):
     dropout_row: any
     transition_m: Transition
 
-    def __call__(self, m, z, *, key):
-        m = m + self.msa_pair_weighted_averaging(m, z)
+    def __call__(self, m, z, *, key, token_mask=None):
+        m = mask_atom_values(m, token_mask)
+        m = m + self.msa_pair_weighted_averaging(m, z, token_mask)
         m = m + self.transition_m(m)
-        return m
+        return mask_atom_values(m, token_mask)
 
 
 class MSABlock(eqx.Module):
@@ -833,9 +850,11 @@ class MSABlock(eqx.Module):
         )
 
     def __call__(self, m, z, pair_mask, *, key):
-        z = z + self.outer_product_mean_msa(m)
+        token_mask = None if pair_mask is None else jnp.any(pair_mask, axis=-1)
+        z = mask_pair_values(z, pair_mask)
+        z = z + self.outer_product_mean_msa(m, token_mask)
         if self.msa_stack is not None:
-            m = self.msa_stack(m, z, key=key)
+            m = self.msa_stack(m, z, key=key, token_mask=token_mask)
         _, z = self.pair_stack(s=None, z=z, pair_mask=pair_mask, key=key)
         return m, z
 
@@ -876,6 +895,7 @@ class MSAModule(eqx.Module):
     input_feature_keys_ordered: list[str]
 
     def __call__(self, input_feature_dict: dict, z, s_inputs, pair_mask, *, key):
+        input_feature_dict = mask_token_features(input_feature_dict)
         if "msa" not in input_feature_dict:
             print("no msa in features")
             return z
@@ -905,6 +925,7 @@ class MSAModule(eqx.Module):
         )
         msa_sample = self.linear_no_bias_m(msa_sample)
         msa_sample = msa_sample + self.linear_no_bias_s(s_inputs)
+        msa_sample = mask_atom_values(msa_sample, input_feature_dict.get("token_pad_mask"))
 
         @jax.checkpoint
         def body_fn(carry, params):
@@ -1004,6 +1025,7 @@ class DiffusionTransformerBlock(AbstractFromTorch):
         n_queries: int | None = None,
         n_keys: int | None = None,
         atom_mask=None,
+        token_mask=None,
     ) -> tuple[Float[Array, "... N C_a"], Float[Array, "... N N C_z"]]:
         # Apply attention pair bias
         attn_out = a + self.drop_path(
@@ -1014,6 +1036,7 @@ class DiffusionTransformerBlock(AbstractFromTorch):
                 n_queries=n_queries,
                 n_keys=n_keys,
                 atom_mask=atom_mask,
+                token_mask=token_mask,
             )
         )
 
@@ -1022,7 +1045,7 @@ class DiffusionTransformerBlock(AbstractFromTorch):
 
         out_a = attn_out + ff_out
 
-        return out_a, s, z
+        return mask_atom_values(out_a, token_mask), s, z
 
 
 class DiffusionTransformer(eqx.Module):
@@ -1049,6 +1072,7 @@ class DiffusionTransformer(eqx.Module):
         n_queries: int | None = None,
         n_keys: int | None = None,
         atom_mask=None,
+        token_mask=None,
     ):
         @jax.checkpoint
         def body_fn(embedding, params):
@@ -1056,6 +1080,7 @@ class DiffusionTransformer(eqx.Module):
             a, s, z = eqx.combine(self.block_static, params)(
                 a=a, s=s, z=z, n_queries=n_queries, n_keys=n_keys,
                 atom_mask=atom_mask,
+                token_mask=token_mask,
             )
             return (a, s, z), None
 
@@ -1420,6 +1445,7 @@ class InputFeatureEmbedder(eqx.Module):
     input_feature_keys_ordered: list[str]
 
     def __call__(self, input_feature_dict: dict[str]):
+        input_feature_dict = mask_token_features(input_feature_dict)
         a, _, _, _ = self.atom_attention_encoder(
             input_feature_dict=input_feature_dict,
         )  # [..., N_token, c_token]
@@ -1434,7 +1460,7 @@ class InputFeatureEmbedder(eqx.Module):
             axis=-1,
         )
 
-        return s_inputs
+        return mask_atom_values(s_inputs, input_feature_dict.get("token_pad_mask"))
 
     @staticmethod
     def from_torch(
@@ -1458,6 +1484,7 @@ class RelativePositionEncoding(AbstractFromTorch):
     input_feature: dict[str, int]
 
     def __call__(self, input_feature_dict: dict[str, jnp.ndarray]):
+        input_feature_dict = mask_token_features(input_feature_dict)
         b_same_chain = (
             input_feature_dict["asym_id"][..., :, None]
             == input_feature_dict["asym_id"][..., None, :]
@@ -1507,7 +1534,7 @@ class RelativePositionEncoding(AbstractFromTorch):
                 axis=-1,
             )
         )
-        return p
+        return mask_pair_values(p, token_pair_mask(input_feature_dict))
 
 
 class DistogramHead(AbstractFromTorch):
@@ -1586,7 +1613,8 @@ class DiffusionConditioning(AbstractFromTorch):
         single_s += self.transition_s1(single_s)
         single_s += self.transition_s2(single_s)
 
-        return single_s, pair_z
+        return (mask_atom_values(single_s, input_feature_dict.get("token_pad_mask")),
+                mask_pair_values(pair_z, token_pair_mask(input_feature_dict)))
 
 
 def broadcast_token_to_atom(
@@ -1702,6 +1730,7 @@ class DiffusionModel(AbstractFromTorch):
             a=a_token,
             s=s_single,
             z=z_pair,
+            token_mask=input_feature_dict.get("token_pad_mask"),
         )
         a_token = self.layernorm_a(a_token)
 
@@ -1908,6 +1937,7 @@ class TemplateEmbedder(AbstractFromTorch):
     linear_no_bias_u: Linear
 
     def __call__(self, input_feature_dict, z, pair_mask=None, *, key):
+        input_feature_dict = mask_token_features(input_feature_dict)
         if "template_aatype" not in input_feature_dict or self.n_blocks < 1:
             return jnp.zeros_like(z)
 
@@ -1971,7 +2001,7 @@ class TemplateEmbedder(AbstractFromTorch):
 
         u = u / (1e-7 + num_templates)
         u = self.linear_no_bias_u(jax.nn.relu(u))
-        return u
+        return mask_pair_values(u, pair_mask)
 
 
 class ConfidenceHead(AbstractFromTorch):
@@ -2000,6 +2030,7 @@ class ConfidenceHead(AbstractFromTorch):
     resolved_ln: LayerNorm
 
     def __call__(self, *, input_feature_dict, s_inputs, s_trunk, z_trunk, pair_mask, x_pred_coords, key, use_embedding=True):
+        input_feature_dict = mask_token_features(input_feature_dict)
         s_trunk = self.input_strunk_ln(jnp.clip(s_trunk, -512, 512))#torch.clamp(s_trunk, min=-512, max=512))
         z_trunk = use_embedding * z_trunk
 
@@ -2056,7 +2087,8 @@ class ConfidenceHead(AbstractFromTorch):
                 self.resolved_ln(a),
                 self.resolved_weight[atom_to_tokatom_idx],
             )
-            return (mask_atom_values(plddt_pred, atom_mask), pae_pred, pde_pred,
+            return (mask_atom_values(plddt_pred, atom_mask),
+                    mask_pair_values(pae_pred, pair_mask), mask_pair_values(pde_pred, pair_mask),
                     mask_atom_values(resolved_pred, atom_mask))
         
         plddt_pred, pae_pred, pde_pred, resolved_pred = jax.vmap(single_structure)(x_pred_rep_coords, jax.random.split(key, N_sample))
@@ -2087,6 +2119,7 @@ class Outputs(eqx.Module):
     confidence_metrics: ConfidenceMetrics
     distogram_logits: Float[Array, "... N_sample N_token N_token 64"]
     atom_pad_mask: Bool[Array, "N_atom"] | None = None
+    token_pad_mask: Bool[Array, "N_token"] | None = None
 
     def to_atom_arrays(self, atom_array):
         """Build one native Biotite AtomArray per sample, applying the presence mask.
@@ -2165,6 +2198,7 @@ class Protenix(eqx.Module):
 
     @eqx.filter_jit
     def embed_inputs(self, *, input_feature_dict) -> InitialEmbedding:
+        input_feature_dict = mask_token_features(input_feature_dict)
         s_inputs = self.input_embedder(input_feature_dict)
         s_init = self.linear_no_bias_sinit(s_inputs)  #  [..., N_token, c_s]
         z_init = (
@@ -2177,13 +2211,16 @@ class Protenix(eqx.Module):
             input_feature_dict["token_bonds"][..., None]
         )
         return InitialEmbedding(
-            s_init=s_init,
-            z_init=z_init,
+            s_init=mask_atom_values(s_init, input_feature_dict.get("token_pad_mask")),
+            z_init=mask_pair_values(z_init, token_pair_mask(input_feature_dict)),
             s_inputs=s_inputs,
         )
     
     @eqx.filter_jit
     def recycle(self, *, initial_embedding: InitialEmbedding, input_feature_dict, recycling_steps: int, key, state = None):
+        input_feature_dict = mask_token_features(input_feature_dict)
+        pair_mask = token_pair_mask(input_feature_dict)
+        token_mask = input_feature_dict.get("token_pad_mask")
         if state is None:
             state = TrunkEmbedding(
                 s=jnp.zeros_like(initial_embedding.s_init),
@@ -2192,17 +2229,18 @@ class Protenix(eqx.Module):
 
         def body_fn(state: TrunkEmbedding, key):
             state = jax.lax.stop_gradient(state)  # Prevent gradient flow through recycling
-            s,z = state.s, state.z
+            s = mask_atom_values(state.s, token_mask)
+            z = mask_pair_values(state.z, pair_mask)
             z = initial_embedding.z_init + self.linear_no_bias_z_cycle(self.layernorm_z_cycle(z))
             if self.template_embedder.n_blocks > 0:
                 z = z + self.template_embedder(
-                    input_feature_dict, z, pair_mask=None, key=key
+                    input_feature_dict, z, pair_mask=pair_mask, key=key
                 )
             z = self.msa_module(
-                input_feature_dict, z, initial_embedding.s_inputs, pair_mask=None, key=key
+                input_feature_dict, z, initial_embedding.s_inputs, pair_mask=pair_mask, key=key
             )
             s = initial_embedding.s_init + self.linear_no_bias_s(self.layernorm_s(s))
-            s, z = self.pairformer_stack(s, z, pair_mask=None, key=jax.random.fold_in(key, 1))
+            s, z = self.pairformer_stack(s, z, pair_mask=pair_mask, key=jax.random.fold_in(key, 1))
             return TrunkEmbedding(s=s, z=z), None
         
         state, _ = jax.lax.scan(
@@ -2240,7 +2278,7 @@ class Protenix(eqx.Module):
             s_inputs=initial_embedding.s_inputs,
             s_trunk=trunk_embedding.s,
             z_trunk=trunk_embedding.z,
-            pair_mask=None,
+            pair_mask=token_pair_mask(input_feature_dict),
             x_pred_coords=coordinates,
             key=key,
             use_embedding=True,
@@ -2287,9 +2325,12 @@ class Protenix(eqx.Module):
 
         return Outputs(
             atom_pad_mask=input_feature_dict.get("atom_pad_mask"),
+            token_pad_mask=input_feature_dict.get("token_pad_mask"),
             coordinates=coordinates,
             confidence_metrics=confidence_metrics,
-            distogram_logits=self.distogram_head(trunk_embedding.z),
+            distogram_logits=mask_pair_values(
+                self.distogram_head(trunk_embedding.z), token_pair_mask(input_feature_dict)
+            ),
         )
 
 

@@ -2,7 +2,8 @@
 
 ``ref_mask`` describes availability of reference-conformer coordinates; it does
 not describe whether an atom exists. ``atom_pad_mask`` is a separate boolean
-array: True for a real atom, False for a padding row. Tokens are not padded.
+array: True for a real atom, False for a padding row. For token padding, compose
+with ``protenix.token_padding.pad_token_features``.
 """
 
 import jax.numpy as jnp

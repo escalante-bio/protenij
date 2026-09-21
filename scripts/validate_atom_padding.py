@@ -27,6 +27,7 @@ from protenix.atom_padding import (
     ATOM_FEATURE_AXES,
     pad_atom_features,
 )
+from protenix.token_padding import pad_token_features, token_pair_mask, mask_pair_values
 from protenix.backend import load_model
 from protenix.protenij import Outputs, sample_diffusion
 from scripts.atom_padding_diagnostics import (
@@ -72,6 +73,7 @@ def main():
     parser.add_argument("--features", nargs="+", required=True)
     parser.add_argument("--model", default="protenix-v2")
     parser.add_argument("--padding-multiple", type=int, default=256)
+    parser.add_argument("--token-count", type=int, help="Also pad tokens to this bucket")
     parser.add_argument("--cycles", type=int, default=1)
     parser.add_argument("--steps", type=int, default=5)
     parser.add_argument("--samples", type=int, default=1)
@@ -131,8 +133,9 @@ def main():
             Outputs(
                 coordinates,
                 confidence,
-                model.distogram_head(trunk.z),
+                mask_pair_values(model.distogram_head(trunk.z), token_pair_mask(features)),
                 features.get("atom_pad_mask"),
+                features.get("token_pad_mask"),
             ),
         )
 
@@ -141,6 +144,9 @@ def main():
     reuse_checks = 0
     for index, native in enumerate(features):
         padded = pad_atom_features(native, padding_multiple=args.padding_multiple)
+        if args.token_count is not None:
+            padded = pad_token_features(padded, args.token_count)
+        n_tokens = native["residue_index"].shape[0]
         n = native["atom_to_token_idx"].shape[0]
         bucket = padded["atom_to_token_idx"].shape[0]
         # Invalid metadata/indices must be harmless, not merely zero by convention.
@@ -228,6 +234,21 @@ def main():
                     coordinates=comparison_arrays(output)[0],
                     prediction_key=np.asarray(jax.random.key_data(key)),
                 )
+            if label == "padded" and args.token_count is not None:
+                for values in (initial_out.s_init, initial_out.s_inputs, trunk_out.s):
+                    if np.any(np.asarray(values)[n_tokens:] != 0):
+                        raise AssertionError("Padded single embeddings are not zero")
+                for values in (initial_out.z_init, trunk_out.z,
+                               output.confidence_metrics.pae_logits,
+                               output.confidence_metrics.pde_logits, output.distogram_logits):
+                    if (np.any(np.asarray(values)[..., n_tokens:, :, :] != 0)
+                            or np.any(np.asarray(values)[..., :, n_tokens:, :] != 0)):
+                        raise AssertionError("Padded pair outputs are not zero")
+            # Initial/trunk arrays have only token axes; compare native rows.
+            initial_out, trunk_out = jax.tree.map(
+                lambda x: x[:n_tokens, :n_tokens] if x.ndim == 3 else x[:n_tokens],
+                (initial_out, trunk_out),
+            )
             outputs.append(jax.device_get((initial_out, trunk_out, output)))
         native_leaves, padded_leaves = [
             jax.tree.leaves((initial, trunk, comparison_arrays(output)))
