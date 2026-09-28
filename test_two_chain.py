@@ -2,7 +2,6 @@
 import os
 os.environ["PROTENIX_DATA_ROOT_DIR"] = os.path.expanduser("~/.protenix")
 
-import copy
 from pathlib import Path
 
 import numpy as np
@@ -153,19 +152,18 @@ outputs = jax_model(
     N_sample=N_sample,
     key=key,
 )
+structures = outputs.to_atom_arrays(atom_array)
+coords = np.stack([structure.coord for structure in structures])
 
-print(f"Output coordinates shape: {outputs.coordinates.shape}")
-print(f"Coordinate range: [{float(outputs.coordinates.min()):.2f}, {float(outputs.coordinates.max()):.2f}]")
+print(f"Output coordinates shape: {coords.shape}")
+print(f"Coordinate range: [{float(coords.min()):.2f}, {float(coords.max()):.2f}]")
 
 
 # ── 6. Save Output ─────────────────────────────────────────────────────────────
 
 from biotite.structure.io.pdb import PDBFile
 
-coords = np.array(outputs.coordinates)
-for i in range(coords.shape[0]):
-    pred_atom_array = copy.deepcopy(atom_array)
-    pred_atom_array.coord = coords[i]
+for i, pred_atom_array in enumerate(structures):
 
     pdb = PDBFile()
     pdb.set_structure(pred_atom_array)

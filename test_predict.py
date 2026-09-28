@@ -2,7 +2,6 @@
 import os
 os.environ["PROTENIX_DATA_ROOT_DIR"] = os.path.expanduser("~/.protenix")
 
-import copy
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -177,9 +176,11 @@ outputs = jax_model(
     N_sample=N_sample,
     key=key,
 )
+structures = outputs.to_atom_arrays(atom_array)
+coords = np.stack([structure.coord for structure in structures])
 
-print(f"Output coordinates shape: {outputs.coordinates.shape}")
-print(f"Coordinate range: [{float(outputs.coordinates.min()):.2f}, {float(outputs.coordinates.max()):.2f}]")
+print(f"Output coordinates shape: {coords.shape}")
+print(f"Coordinate range: [{float(coords.min()):.2f}, {float(coords.max()):.2f}]")
 
 # ── 5. Save PDB Files ──────────────────────────────────────────────────────────
 
@@ -187,10 +188,7 @@ from biotite.structure.io.pdb import PDBFile
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-coords = np.array(outputs.coordinates)  # (N_sample, N_atom, 3)
-for i in range(coords.shape[0]):
-    pred_atom_array = copy.deepcopy(atom_array)
-    pred_atom_array.coord = coords[i]
+for i, pred_atom_array in enumerate(structures):
 
     pdb = PDBFile()
     pdb.set_structure(pred_atom_array)
