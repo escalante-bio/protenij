@@ -2216,33 +2216,58 @@ class Protenix(eqx.Module):
             s_inputs=s_inputs,
         )
     
-    @eqx.filter_jit
-    def recycle(self, *, initial_embedding: InitialEmbedding, input_feature_dict, recycling_steps: int, key, state = None):
+    def init_state(self, *, initial_embedding: InitialEmbedding) -> TrunkEmbedding:
+        """The recycled state before the first pass (zeros)."""
+        return TrunkEmbedding(
+            s=jnp.zeros_like(initial_embedding.s_init),
+            z=jnp.zeros_like(initial_embedding.z_init),
+        )
+
+    def step(
+        self,
+        *,
+        initial_embedding: InitialEmbedding,
+        input_feature_dict,
+        state: TrunkEmbedding,
+        key,
+    ) -> TrunkEmbedding:
+        """Exactly one trunk pass (AF3 Algorithm 1 lines 8-13). ``key`` drives the
+        pass's MSA row sampling and dropout. Differentiates through ``state``;
+        `recycle` detaches it."""
         input_feature_dict = mask_token_features(input_feature_dict)
         pair_mask = token_pair_mask(input_feature_dict)
-        token_mask = input_feature_dict.get("token_pad_mask")
-        if state is None:
-            state = TrunkEmbedding(
-                s=jnp.zeros_like(initial_embedding.s_init),
-                z=jnp.zeros_like(initial_embedding.z_init),
+        s = mask_atom_values(state.s, input_feature_dict.get("token_pad_mask"))
+        z = mask_pair_values(state.z, pair_mask)
+        z = initial_embedding.z_init + self.linear_no_bias_z_cycle(self.layernorm_z_cycle(z))
+        if self.template_embedder.n_blocks > 0:
+            z = z + self.template_embedder(
+                input_feature_dict, z, pair_mask=pair_mask, key=key
             )
+        z = self.msa_module(
+            input_feature_dict, z, initial_embedding.s_inputs, pair_mask=pair_mask, key=key
+        )
+        s = initial_embedding.s_init + self.linear_no_bias_s(self.layernorm_s(s))
+        s, z = self.pairformer_stack(s, z, pair_mask=pair_mask, key=jax.random.fold_in(key, 1))
+        return TrunkEmbedding(s=s, z=z)
+
+    @eqx.filter_jit
+    def recycle(self, *, initial_embedding: InitialEmbedding, input_feature_dict, recycling_steps: int, key, state = None):
+        """``recycling_steps`` passes of `step`, pass ``i`` with
+        ``jax.random.split(key, recycling_steps)[i]``. Gradients flow through the
+        last pass only."""
+        input_feature_dict = mask_token_features(input_feature_dict)
+        if state is None:
+            state = self.init_state(initial_embedding=initial_embedding)
 
         def body_fn(state: TrunkEmbedding, key):
             state = jax.lax.stop_gradient(state)  # Prevent gradient flow through recycling
-            s = mask_atom_values(state.s, token_mask)
-            z = mask_pair_values(state.z, pair_mask)
-            z = initial_embedding.z_init + self.linear_no_bias_z_cycle(self.layernorm_z_cycle(z))
-            if self.template_embedder.n_blocks > 0:
-                z = z + self.template_embedder(
-                    input_feature_dict, z, pair_mask=pair_mask, key=key
-                )
-            z = self.msa_module(
-                input_feature_dict, z, initial_embedding.s_inputs, pair_mask=pair_mask, key=key
-            )
-            s = initial_embedding.s_init + self.linear_no_bias_s(self.layernorm_s(s))
-            s, z = self.pairformer_stack(s, z, pair_mask=pair_mask, key=jax.random.fold_in(key, 1))
-            return TrunkEmbedding(s=s, z=z), None
-        
+            return self.step(
+                initial_embedding=initial_embedding,
+                input_feature_dict=input_feature_dict,
+                state=state,
+                key=key,
+            ), None
+
         state, _ = jax.lax.scan(
             body_fn,
             init=state,
