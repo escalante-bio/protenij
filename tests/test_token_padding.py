@@ -192,6 +192,20 @@ class TokenModelTests(unittest.TestCase):
                 # Native length change retraces, but both padded calls share one trace.
                 self.assertEqual(len(traces), 1 if n == 3 else 0)
 
+    def test_steps_compose_to_recycle(self):
+        model, key = self.model, jax.random.key(15)
+        for f in (features(3), poison_tokens(pad_token_features(pad_atom_features(features(3), 16), 8), 3)):
+            init = model.embed_inputs(input_feature_dict=f)
+            for passes in (1, 3):
+                expected = model.recycle(initial_embedding=init, input_feature_dict=f,
+                    recycling_steps=passes, key=key)
+                state = model.init_state(initial_embedding=init)
+                for k in jax.random.split(key, passes):
+                    state = model.step(initial_embedding=init, input_feature_dict=f,
+                        state=state, key=k)
+                assert_allclose(state.s, expected.s, atol=2e-5, rtol=2e-5)
+                assert_allclose(state.z, expected.z, atol=2e-5, rtol=2e-5)
+
     def test_fully_masked_pairformer(self):
         single, pair = self.model.pairformer_stack(
             s=jnp.full((4,32), jnp.nan), z=jnp.full((4,4,8), jnp.nan),
